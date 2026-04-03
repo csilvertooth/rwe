@@ -6,6 +6,7 @@
 #include <rwe/sim/SimAngle.h>
 #include <rwe/sim/SimScalar.h>
 #include <string>
+#include <vector>
 
 namespace rwe
 {
@@ -48,5 +49,14 @@ namespace rwe
 
         /** If true, projectile does not explode when hitting the ground but instead continues travelling. */
         bool groundBounce;
+
+        /** If true, weapon targets air units (VTOL category). */
+        bool toAirWeapon{false};
+
+        /** Category tags this weapon can only target. Empty means no restriction. */
+        std::vector<std::string> onlyTargetCategory;
+
+        /** Category tags this weapon will not chase. */
+        std::vector<std::string> noChaseCategory;
     };
 }

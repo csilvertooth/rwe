@@ -82,5 +82,7 @@ namespace rwe
         std::string yardMap;
 
         std::string corpse;
+
+        std::string category;
     };
 }

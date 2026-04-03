@@ -113,6 +113,9 @@ namespace rwe
         std::vector<std::pair<std::string, unsigned int>> damage;
 
         std::string weaponType2;
+
+        std::string onlyTargetCategory;
+        std::string noChaseCategory;
     };
 
     std::vector<std::pair<std::string, unsigned int>> parseWeaponDamageBlock(const TdfBlock& block);

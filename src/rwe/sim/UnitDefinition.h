@@ -7,6 +7,7 @@
 #include <rwe/sim/SimScalar.h>
 #include <string>
 #include <variant>
+#include <vector>
 
 namespace rwe
 {
@@ -123,5 +124,8 @@ namespace rwe
         bool showPlayerName;
 
         std::string soundCategory;
+
+        /** Space-separated category tags, e.g. "KBOT WEAPON LEVEL1 NOTAIR" */
+        std::vector<std::string> categories;
     };
 }

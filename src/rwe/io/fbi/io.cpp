@@ -91,6 +91,8 @@ namespace rwe
 
         tdf.readOrDefault("Corpse", u.corpse);
 
+        tdf.readOrDefault("Category", u.category);
+
         return u;
     }
 }

@@ -133,6 +133,9 @@ namespace rwe
 
         tdf.readOrDefault("weaponType2", w.weaponType2);
 
+        tdf.readOrDefault("onlyTargetCategory", w.onlyTargetCategory);
+        tdf.readOrDefault("noChaseCategory", w.noChaseCategory);
+
         return w;
     }
 

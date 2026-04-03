@@ -1,4 +1,5 @@
 #include "UnitBehaviorService.h"
+#include <algorithm>
 #include <rwe/cob/CobExecutionContext.h>
 #include <rwe/sim/UnitBehaviorService_util.h>
 #include <rwe/sim/cob.h>
@@ -287,6 +288,49 @@ namespace rwe
         return false;
     }
 
+    bool hasCategory(const UnitDefinition& unitDef, const std::string& cat)
+    {
+        return std::find(unitDef.categories.begin(), unitDef.categories.end(), cat) != unitDef.categories.end();
+    }
+
+    bool matchesTargetCategories(const WeaponDefinition& weaponDef, const UnitDefinition& targetDef)
+    {
+        // toAirWeapon: only targets units with VTOL category
+        if (weaponDef.toAirWeapon && !hasCategory(targetDef, "VTOL"))
+        {
+            return false;
+        }
+
+        // onlyTargetCategory: target must have at least one of these categories
+        if (!weaponDef.onlyTargetCategory.empty())
+        {
+            bool found = false;
+            for (const auto& cat : weaponDef.onlyTargetCategory)
+            {
+                if (hasCategory(targetDef, cat))
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                return false;
+            }
+        }
+
+        // noChaseCategory: target must NOT have any of these categories
+        for (const auto& cat : weaponDef.noChaseCategory)
+        {
+            if (hasCategory(targetDef, cat))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     void UnitBehaviorService::updateWeapon(UnitId id, unsigned int weaponIndex)
     {
         auto& unit = sim->getUnitState(id);
@@ -319,6 +363,13 @@ namespace rwe
                     }
 
                     if (unit.position.distanceSquared(otherUnit.position) > weaponDefinition.maxRange * weaponDefinition.maxRange)
+                    {
+                        continue;
+                    }
+
+                    // Category-based targeting filter
+                    const auto& otherUnitDef = sim->unitDefinitions.at(otherUnit.unitType);
+                    if (!matchesTargetCategories(weaponDefinition, otherUnitDef))
                     {
                         continue;
                     }

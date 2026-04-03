@@ -1,5 +1,7 @@
 #include "LoadingScene.h"
+#include <algorithm>
 #include <boost/interprocess/streams/bufferstream.hpp>
+#include <sstream>
 #include <rwe/atlas_util.h>
 #include <rwe/collections/SimpleVectorMap.h>
 #include <rwe/game/FeatureMediaInfo.h>
@@ -554,6 +556,19 @@ namespace rwe
         }
     }
 
+    std::vector<std::string> splitCategories(const std::string& s)
+    {
+        std::vector<std::string> result;
+        std::istringstream stream(s);
+        std::string token;
+        while (stream >> token)
+        {
+            std::transform(token.begin(), token.end(), token.begin(), ::toupper);
+            result.push_back(token);
+        }
+        return result;
+    }
+
     WeaponDefinition parseWeaponDefinition(const WeaponTdf& tdf)
     {
         WeaponDefinition weaponDefinition;
@@ -598,6 +613,10 @@ namespace rwe
         weaponDefinition.groundBounce = tdf.groundBounce;
 
         weaponDefinition.randomDecay = GameTime(static_cast<unsigned int>(tdf.randomDecay * 30.0f));
+
+        weaponDefinition.toAirWeapon = tdf.toAirWeapon;
+        weaponDefinition.onlyTargetCategory = splitCategories(tdf.onlyTargetCategory);
+        weaponDefinition.noChaseCategory = splitCategories(tdf.noChaseCategory);
 
         return weaponDefinition;
     }
@@ -726,6 +745,8 @@ namespace rwe
         u.showPlayerName = fbi.showPlayerName;
 
         u.soundCategory = fbi.soundCategory;
+
+        u.categories = splitCategories(fbi.category);
 
         auto movementClassId = collisionService.resolveMovementClass(fbi.movementClass);
 
