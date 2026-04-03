@@ -20,7 +20,7 @@ if [ "$source_protobuf_version" != "$built_protobuf_version" ]; then
     rm -rf "$install_dir"
     ./autogen.sh
     ./configure "--prefix=$install_dir"
-    make -j`nproc`
+    make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     make install
     echo "$protobuf_version" > "$install_dir/done"
 else

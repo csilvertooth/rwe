@@ -38,6 +38,7 @@ namespace rwe
 
     CobAngle toCobAngle(RadiansAngle angle)
     {
-        return CobAngle(static_cast<uint16_t>(std::round(angle.value * (32768.0f / Pif))));
+        auto raw = static_cast<int32_t>(std::round(angle.value * (32768.0f / Pif)));
+        return CobAngle(static_cast<uint16_t>(static_cast<int16_t>(raw)));
     }
 }

@@ -88,6 +88,42 @@ jobs:
           popd
       - name: test rwe
         run: ./build/rwe_test
+  build-macos:
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: install homebrew packages
+        run: brew install glew boost sdl2 sdl2_image sdl2_mixer libpng zlib autoconf automake libtool
+      - name: restore protobuf
+        id: cache-protobuf-restore
+        uses: actions/cache/restore@v3
+        with:
+          path: libs/_protobuf-install
+          key: ${{ runner.os }}-protobuf-${{ hashFiles('.git/modules/libs/protobuf/HEAD') }}
+      - name: build protobuf
+        working-directory: libs
+        run: ./build-protobuf.sh
+      - name: save protobuf
+        id: cache-protobuf-save
+        uses: actions/cache/save@v3
+        with:
+          path: libs/_protobuf-install
+          key: ${{ steps.cache-protobuf-restore.outputs.cache-primary-key }}
+      - name: build rwe
+        run: |
+          mkdir build
+          pushd build
+          cmake -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ..
+          make -j 3
+          popd
+      - name: test rwe
+        run: ./build/rwe_test
   build-windows-msvc:
     strategy:
       matrix:

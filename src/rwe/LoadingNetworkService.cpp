@@ -25,7 +25,7 @@ namespace rwe
         std::scoped_lock<std::mutex> lock(mutex);
 
         // boost guarantees that resolve returns non-empty
-        remoteEndpoints.emplace_back(playerIndex, *resolver.resolve(boost::asio::ip::udp::resolver::query(host, port)), Status::Loading);
+        remoteEndpoints.emplace_back(playerIndex, *resolver.resolve(host, port).begin(), Status::Loading);
     }
 
     void LoadingNetworkService::setDoneLoading()
@@ -181,7 +181,7 @@ namespace rwe
     void LoadingNetworkService::notifyStatusLoop()
     {
         notifyStatus();
-        notifyTimer.expires_from_now(std::chrono::milliseconds(100));
+        notifyTimer.expires_after(std::chrono::milliseconds(100));
         notifyTimer.async_wait([this](const boost::system::error_code& error) {
             if (error)
             {
