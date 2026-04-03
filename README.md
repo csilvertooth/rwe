@@ -16,6 +16,36 @@ with Total Annihilation data files. This fork focuses on:
 - Modern networking with NAT traversal
 - Preserving the authentic TA look and feel
 
+## Project Status
+
+### Phase 1 -- macOS ARM Build [COMPLETE]
+- Cross-platform build scripts (macOS, Linux, Windows)
+- SDL3 migration (vendored submodule, static linked)
+- GitHub Actions CI for Linux (gcc-14, clang-18), macOS ARM, Windows (MSVC, MinGW64)
+
+### Phase 2 -- Core Engine [IN PROGRESS]
+| Feature | Status |
+|---------|--------|
+| EXPLODE opcode (unit deaths) | Done |
+| COB GET/SET completeness (30+ values) | Done |
+| Fog of war + line-of-sight | Done |
+| Radar / sonar / jamming | Not started |
+| Category-based weapon targeting | Done |
+| Guided projectile physics (missiles, bombs) | Done |
+| Beam weapons (BeamWeapon, Duration) | Done |
+| Reclaim / D-Gun / capture | Not started |
+| Veterancy system (XP, stat bonuses) | Done |
+| Paralyzer/EMP system | Done |
+| Self-destruct / kamikaze | Done |
+
+### Phase 3 -- 3.9.02 Patch Parity
+Interceptor/shields, transports, naval, teleporters, stockpile weapons,
+cloaking, DamageModifier/ArmorType, area commands, MegaMap strategic overlay.
+
+### Phase 4 -- Modernization
+GameNetworkingSockets networking, NAT traversal, basic AI, pathfinding
+improvements, high-DPI support, expanded player slots.
+
 ## Acknowledgments
 
 This project would not be possible without the work of:
@@ -43,40 +73,47 @@ Requires Total Annihilation data files (.hpi, .ufo, rev31.gp3, etc.)
 
 ### macOS (Apple Silicon / Intel)
 
-    brew install cmake glew boost sdl2 sdl2_image sdl2_mixer libpng zlib autoconf automake libtool
+    scripts/build-macos.sh Release
+
+Or manually:
+
+    brew install cmake glew zlib libpng
 
     git clone https://github.com/csilvertooth/rwe.git
     cd rwe
-    git submodule update --init --recursive
+    git submodule update --init --recursive --depth 1
 
     cd libs && ./build-protobuf.sh && cd ..
 
-    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    cmake -B build -DCMAKE_BUILD_TYPE=Release
     cmake --build build -j$(sysctl -n hw.ncpu)
 
-    ./build/rwe --data-path /path/to/ta/data
+    ./build/AnnihilationEngine --data-path /path/to/ta/data
 
 ### Linux (Ubuntu/Debian)
 
-    sudo apt-get install gcc g++ cmake libboost-dev libboost-filesystem-dev \
-      libboost-program-options-dev libsdl2-dev libsdl2-image-dev \
-      libsdl2-mixer-dev libglew-dev zlib1g-dev libpng-dev
+    scripts/build-linux.sh Release
+
+Or manually:
+
+    sudo apt-get install gcc g++ cmake libglew-dev zlib1g-dev libpng-dev \
+      libasound2-dev libpulse-dev libpipewire-0.3-dev libwayland-dev \
+      wayland-protocols libxkbcommon-dev libdecor-0-dev autoconf automake libtool
 
     git clone https://github.com/csilvertooth/rwe.git
     cd rwe
-    git submodule update --init --recursive
+    git submodule update --init --recursive --depth 1
 
     cd libs && ./build-protobuf.sh && cd ..
 
     cmake -B build -DCMAKE_BUILD_TYPE=Release
     cmake --build build -j$(nproc)
 
-    ./build/rwe --data-path /path/to/ta/data
+    ./build/AnnihilationEngine --data-path /path/to/ta/data
 
-### Windows
+### Windows (MSYS2 MinGW64)
 
-See the original [RWE build instructions](https://github.com/MHeasell/rwe#how-to-build)
-for Visual Studio and MSYS2 setup.
+    scripts/build-windows.sh Release
 
 ## How to Play
 
@@ -85,7 +122,7 @@ for Visual Studio and MSYS2 setup.
 - Right click to move/attack
 - A then click to attack-move
 - S to stop
-- F10 for in-game debug menu (spawn units)
+- F10 for in-game debug menu (spawn units, toggle fog of war)
 - F11 for global debug menu
 
 ## License

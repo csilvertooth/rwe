@@ -954,6 +954,7 @@ namespace rwe
         }
 
         const auto& weaponDefinition = sim->weaponDefinitions.at(unitInfo.state->weapons[0]->weaponType);
+        const auto& unitDefinition = sim->unitDefinitions.at(unitInfo.state->unitType);
 
         auto targetPosition = getTargetPosition(target);
         if (!targetPosition)
@@ -963,19 +964,44 @@ namespace rwe
         }
 
         auto maxRangeSquared = weaponDefinition.maxRange * weaponDefinition.maxRange;
-        if (unitInfo.state->position.distanceSquared(*targetPosition) > maxRangeSquared)
+        auto inRange = unitInfo.state->position.distanceSquared(*targetPosition) <= maxRangeSquared;
+
+        // Air units without hoverAttack do strafing runs: always fly toward the target
+        // so that their forward direction aligns with the firing direction.
+        // Gunships (hoverAttack=true) can stop and fire like ground units.
+        if (unitDefinition.canFly && !unitDefinition.hoverAttack)
         {
+            // Always navigate toward target for attack run
             navigateTo(unitInfo, attackTargetToNavigationGoal(target));
+
+            // Also aim weapons if in range
+            if (inRange)
+            {
+                for (unsigned int i = 0; i < 2; ++i)
+                {
+                    match(
+                        target,
+                        [&](const UnitId& u) { unitInfo.state->setWeaponTarget(i, u); },
+                        [&](const SimVector& v) { unitInfo.state->setWeaponTarget(i, v); });
+                }
+            }
         }
         else
         {
-            // we're in range, aim weapons
-            for (unsigned int i = 0; i < 2; ++i)
+            if (!inRange)
             {
-                match(
-                    target,
-                    [&](const UnitId& u) { unitInfo.state->setWeaponTarget(i, u); },
-                    [&](const SimVector& v) { unitInfo.state->setWeaponTarget(i, v); });
+                navigateTo(unitInfo, attackTargetToNavigationGoal(target));
+            }
+            else
+            {
+                // we're in range, aim weapons
+                for (unsigned int i = 0; i < 2; ++i)
+                {
+                    match(
+                        target,
+                        [&](const UnitId& u) { unitInfo.state->setWeaponTarget(i, u); },
+                        [&](const SimVector& v) { unitInfo.state->setWeaponTarget(i, v); });
+                }
             }
         }
 

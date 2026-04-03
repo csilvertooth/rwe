@@ -8,6 +8,7 @@
 #include <rwe/math/Matrix4x.h>
 #include <rwe/pathfinding/AStarPathFinder.h>
 #include <rwe/pathfinding/PathCost.h>
+#include <rwe/sim/FogOfWar.h>
 #include <rwe/sim/GameSimulation.h>
 #include <rwe/sim/MapTerrain.h>
 #include <rwe/sim/OccupiedGrid.h>
@@ -30,6 +31,8 @@ namespace rwe
     drawTerrainArrow(const MapTerrain& terrain, const Point& start, const Point& end, const Color& color, ColoredMeshBatch& batch);
 
     void drawOccupiedGrid(const Vector3f& cameraPosition, float viewportWidth, float viewportHeight, const MapTerrain& terrain, const OccupiedGrid& occupiedGrid, ColoredMeshBatch& batch);
+
+    void drawFogOfWar(const Vector3f& cameraPosition, float viewportWidth, float viewportHeight, const MapTerrain& terrain, const PlayerFogOfWar& fog, ColoredMeshBatch& unexploredBatch, ColoredMeshBatch& foggedBatch);
 
     void drawMovementClassCollisionGrid(const MapTerrain& terrain, const Grid<char>& movementClassGrid, const Vector3f& cameraPosition, float viewportWidth, float viewportHeight, ColoredMeshBatch& batch);
 
@@ -108,7 +111,9 @@ namespace rwe
         std::vector<SharedTextureHandle>& unitTeamTextureAtlases,
         ColoredMeshBatch& coloredMeshbatch,
         SpriteBatch& spriteBatch,
-        UnitMeshBatch& unitMeshBatch);
+        UnitMeshBatch& unitMeshBatch,
+        PlayerId localPlayerId,
+        bool fogOfWarEnabled);
 
     void drawSelectionRect(const GameMediaDatabase& gameMediaDatabase, const Matrix4f& viewProjectionMatrix, const UnitState& unit, const UnitDefinition& unitDefinition, float frac, ColoredMeshesBatch& batch);
 }

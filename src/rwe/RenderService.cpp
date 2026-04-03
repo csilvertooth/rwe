@@ -161,6 +161,28 @@ namespace rwe
         }
     }
 
+    void RenderService::drawBatch(const ColoredMeshBatch& batch, const Matrix4f& vpMatrix, float alpha)
+    {
+        if (!batch.lines.empty() || !batch.triangles.empty())
+        {
+            const auto& shader = shaders->basicColor;
+            graphics->bindShader(shader.handle.get());
+            graphics->setUniformFloat(shader.alpha, alpha);
+            graphics->setUniformMatrix(shader.mvpMatrix, vpMatrix);
+            if (!batch.lines.empty())
+            {
+                auto mesh = graphics->createColoredMesh(batch.lines, GL_STREAM_DRAW);
+                graphics->drawLines(mesh);
+            }
+
+            if (!batch.triangles.empty())
+            {
+                auto mesh = graphics->createColoredMesh(batch.triangles, GL_STREAM_DRAW);
+                graphics->drawTriangles(mesh);
+            }
+        }
+    }
+
     void RenderService::drawUnitMeshBatch(const UnitMeshBatch& batch, float seaLevel, float time)
     {
         if (!batch.buildingMeshes.empty())

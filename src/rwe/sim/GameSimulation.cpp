@@ -1916,6 +1916,26 @@ namespace rwe
         return isCellVisible(fogOfWar[viewer.value], heightmapPos.x, heightmapPos.y);
     }
 
+    bool GameSimulation::isPositionVisible(PlayerId viewer, const SimVector& position) const
+    {
+        if (viewer.value >= fogOfWar.size())
+        {
+            return true;
+        }
+        auto heightmapPos = terrain.worldToHeightmapCoordinate(position);
+        return isCellVisible(fogOfWar[viewer.value], heightmapPos.x, heightmapPos.y);
+    }
+
+    bool GameSimulation::isPositionExplored(PlayerId viewer, const SimVector& position) const
+    {
+        if (viewer.value >= fogOfWar.size())
+        {
+            return true;
+        }
+        auto heightmapPos = terrain.worldToHeightmapCoordinate(position);
+        return isCellExplored(fogOfWar[viewer.value], heightmapPos.x, heightmapPos.y);
+    }
+
     std::optional<FeatureDefinitionId> GameSimulation::tryGetFeatureDefinitionId(const std::string& featureName) const
     {
         if (auto it = featureNameIndex.find(toUpper(featureName)); it != featureNameIndex.end())

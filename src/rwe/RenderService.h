@@ -102,6 +102,8 @@ namespace rwe
 
         void drawBatch(const ColoredMeshBatch& batch, const Matrix4f& vpMatrix);
 
+        void drawBatch(const ColoredMeshBatch& batch, const Matrix4f& vpMatrix, float alpha);
+
         void drawUnitMeshBatch(const UnitMeshBatch& batch, float seaLevel, float time);
 
         void drawUnitShadowMeshBatch(const UnitShadowMeshBatch& batch);

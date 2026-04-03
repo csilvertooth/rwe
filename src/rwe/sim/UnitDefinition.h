@@ -88,6 +88,9 @@ namespace rwe
 
         bool canFly;
 
+        /** True if the air unit can hover in place and fire (gunships). False = must do strafing runs (fighters). */
+        bool hoverAttack{false};
+
         /** Distance above the ground that the unit flies at. */
         SimScalar cruiseAltitude;
 

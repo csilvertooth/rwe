@@ -136,6 +136,8 @@ namespace rwe
 
         TextureHandle createEmptyTexture(unsigned int width, unsigned int height);
 
+        void updateTexture(TextureIdentifier texture, unsigned int width, unsigned int height, const Color* data);
+
         TextureHandle createColorTexture(Color c);
 
         TextureArrayHandle createTextureArray(unsigned int width, unsigned int height, unsigned int mipMapLevels, std::vector<Color>& images);

@@ -41,6 +41,8 @@ namespace rwe
 
         bool canFly;
 
+        bool hoverAttack{false};
+
         unsigned int cruiseAlt;
 
         std::string weapon1;

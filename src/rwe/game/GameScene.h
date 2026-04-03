@@ -261,6 +261,7 @@ namespace rwe
         bool cursorTerrainDotVisible{false};
 
         bool healthBarsVisible{false};
+        bool fogOfWarEnabled{true};
 
         BehaviorSubject<CursorMode> cursorMode{NormalCursorMode()};
 
@@ -303,6 +304,11 @@ namespace rwe
         FrameBufferInfo worldFrameBuffer;
 
         TextureHandle dodgeMask;
+
+        TextureHandle fogTexture;
+        std::vector<Color> fogTextureData;
+        unsigned int fogTextureWidth{0};
+        unsigned int fogTextureHeight{0};
 
         struct ProjectileRenderInfo
         {
@@ -503,6 +509,7 @@ namespace rwe
         void renderUnitOrders(UnitId unitId, bool drawLines);
 
         void renderBuildBoxes(const UnitState& unit, const Color& color);
+        void renderBuildBoxes(const UnitState& unit, const Color& color, const Matrix4f& worldToUi);
 
         void attachOrdersMenuEventHandlers();
 

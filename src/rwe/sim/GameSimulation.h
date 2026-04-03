@@ -481,6 +481,10 @@ namespace rwe
 
         bool isUnitVisible(PlayerId viewer, UnitId target) const;
 
+        bool isPositionVisible(PlayerId viewer, const SimVector& position) const;
+
+        bool isPositionExplored(PlayerId viewer, const SimVector& position) const;
+
         std::optional<FeatureDefinitionId> tryGetFeatureDefinitionId(const std::string& featureName) const;
 
         const FeatureDefinition& getFeatureDefinition(FeatureDefinitionId featureDefinitionId) const;

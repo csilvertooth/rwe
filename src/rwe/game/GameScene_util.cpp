@@ -198,6 +198,69 @@ namespace rwe
         }
     }
 
+    void drawFogOfWar(const Vector3f& cameraPosition, float viewportWidth, float viewportHeight, const MapTerrain& terrain, const PlayerFogOfWar& fog, ColoredMeshBatch& unexploredBatch, ColoredMeshBatch& foggedBatch)
+    {
+        auto halfWidth = viewportWidth / 2.0f;
+        auto halfHeight = viewportHeight / 2.0f;
+        auto left = cameraPosition.x - halfWidth;
+        auto top = cameraPosition.z - halfHeight;
+        auto right = cameraPosition.x + halfWidth;
+        auto bottom = cameraPosition.z + halfHeight;
+
+        assert(left < right);
+        assert(top < bottom);
+
+        assert(terrain.getHeightMap().getWidth() >= 2);
+        assert(terrain.getHeightMap().getHeight() >= 2);
+
+        auto gridW = static_cast<int>(fog.grid.getWidth());
+        auto gridH = static_cast<int>(fog.grid.getHeight());
+
+        auto topLeftCell = terrain.worldToHeightmapCoordinate(floatToSimVector(Vector3f(left, 0.0f, top)));
+        topLeftCell.x = std::clamp(topLeftCell.x, 0, gridW - 2);
+        topLeftCell.y = std::clamp(topLeftCell.y, 0, gridH - 2);
+
+        auto bottomRightCell = terrain.worldToHeightmapCoordinate(floatToSimVector(Vector3f(right, 0.0f, bottom)));
+        bottomRightCell.y += 7; // compensate for terrain height
+        bottomRightCell.x = std::clamp(bottomRightCell.x, 0, gridW - 2);
+        bottomRightCell.y = std::clamp(bottomRightCell.y, 0, gridH - 2);
+
+        assert(topLeftCell.x <= bottomRightCell.x);
+        assert(topLeftCell.y <= bottomRightCell.y);
+
+        const Vector3f black(0.0f, 0.0f, 0.0f);
+
+        for (int y = topLeftCell.y; y <= bottomRightCell.y; ++y)
+        {
+            for (int x = topLeftCell.x; x <= bottomRightCell.x; ++x)
+            {
+                const auto& cell = fog.grid.get(x, y);
+
+                // Visible cells get no overlay
+                if (cell.visibleCount > 0)
+                {
+                    continue;
+                }
+
+                auto pos = simVectorToFloat(terrain.heightmapIndexToWorldCorner(x, y));
+                pos.y = terrain.getHeightMap().get(x, y) + 0.5f;
+
+                auto rightPos = simVectorToFloat(terrain.heightmapIndexToWorldCorner(x + 1, y));
+                rightPos.y = terrain.getHeightMap().get(x + 1, y) + 0.5f;
+
+                auto downPos = simVectorToFloat(terrain.heightmapIndexToWorldCorner(x, y + 1));
+                downPos.y = terrain.getHeightMap().get(x, y + 1) + 0.5f;
+
+                auto downRightPos = simVectorToFloat(terrain.heightmapIndexToWorldCorner(x + 1, y + 1));
+                downRightPos.y = terrain.getHeightMap().get(x + 1, y + 1) + 0.5f;
+
+                auto& batch = cell.explored ? foggedBatch : unexploredBatch;
+                pushTriangle(batch.triangles, pos, downPos, downRightPos, black);
+                pushTriangle(batch.triangles, pos, downRightPos, rightPos, black);
+            }
+        }
+    }
+
     void drawMovementClassCollisionGrid(
         const MapTerrain& terrain,
         const Grid<char>& movementClassGrid,
@@ -811,11 +874,19 @@ namespace rwe
         std::vector<SharedTextureHandle>& unitTeamTextureAtlases,
         ColoredMeshBatch& coloredMeshbatch,
         SpriteBatch& spriteBatch,
-        UnitMeshBatch& unitMeshBatch)
+        UnitMeshBatch& unitMeshBatch,
+        PlayerId localPlayerId,
+        bool fogOfWarEnabled)
     {
         for (const auto& e : projectiles)
         {
             const auto& projectile = e.second;
+
+            // Hide enemy projectiles in fogged areas
+            if (fogOfWarEnabled && projectile.owner != localPlayerId && !sim.isPositionVisible(localPlayerId, projectile.position))
+            {
+                continue;
+            }
             auto position = lerp(simVectorToFloat(projectile.previousPosition), simVectorToFloat(projectile.position), frac);
 
             const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(projectile.weaponType);

@@ -9,7 +9,7 @@ namespace rwe
     static const std::string ProjectName("@PROJECT_NAME@");
     static const std::string ProjectBuildType("@CMAKE_BUILD_TYPE@");
 
-    static const std::string ProjectNameVersion = ProjectName + " " + GitDescription + "-" + ProjectBuildType;
+    static const std::string ProjectNameVersion = ProjectName + " " + GitDescription;
 }
 
 #endif

@@ -313,6 +313,7 @@ namespace rwe
         u.canHover = fbi.canHover;
 
         u.canFly = fbi.canFly;
+        u.hoverAttack = fbi.hoverAttack;
 
         u.cruiseAltitude = SimScalar(fbi.cruiseAlt);
 

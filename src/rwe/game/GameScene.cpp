@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include <GL/glew.h>
 #include <algorithm>
 #include <fstream>
 #include <functional>
@@ -249,6 +250,20 @@ namespace rwe
         gameNetworkService->start();
 
         recreateWorldRenderTextures();
+
+        // Initialize fog of war texture with GL_LINEAR for smooth edges
+        if (!simulation.fogOfWar.empty() && localPlayerId.value < simulation.fogOfWar.size())
+        {
+            const auto& fog = simulation.fogOfWar[localPlayerId.value];
+            fogTextureWidth = fog.grid.getWidth();
+            fogTextureHeight = fog.grid.getHeight();
+            fogTextureData.resize(fogTextureWidth * fogTextureHeight, Color(0, 0, 0, 255));
+            fogTexture = sceneContext.graphics->createTexture(fogTextureWidth, fogTextureHeight, fogTextureData.data());
+            // Override filter to GL_LINEAR for smooth fog edges
+            glBindTexture(GL_TEXTURE_2D, fogTexture.get().value);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        }
     }
 
     float computeSoundCeiling(int soundCount)
@@ -521,10 +536,77 @@ namespace rwe
         auto cameraInverse = computeInverseViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height());
         auto worldToMinimap = worldToMinimapMatrix(simulation.terrain, minimapRect);
 
+        // draw minimap fog overlay (batched into two draw calls)
+        if (fogOfWarEnabled && localPlayerId.value < simulation.fogOfWar.size())
+        {
+            const auto& fog = simulation.fogOfWar[localPlayerId.value];
+            auto gridW = static_cast<int>(fog.grid.getWidth());
+            auto gridH = static_cast<int>(fog.grid.getHeight());
+
+            int stride = std::max(1, std::min(gridW, gridH) / 64);
+
+            ColoredMeshBatch minimapUnexploredBatch;
+            ColoredMeshBatch minimapFoggedBatch;
+            const Vector3f black(0.0f, 0.0f, 0.0f);
+
+            for (int y = 0; y < gridH - stride; y += stride)
+            {
+                for (int x = 0; x < gridW - stride; x += stride)
+                {
+                    const auto& cell = fog.grid.get(x, y);
+                    if (cell.visibleCount > 0)
+                    {
+                        continue;
+                    }
+
+                    auto tl = worldToMinimap * simVectorToFloat(simulation.terrain.heightmapIndexToWorldCorner(x, y));
+                    auto br = worldToMinimap * simVectorToFloat(simulation.terrain.heightmapIndexToWorldCorner(x + stride, y + stride));
+
+                    Vector3f a(tl.x, tl.y, 0.0f);
+                    Vector3f b(tl.x, br.y, 0.0f);
+                    Vector3f c(br.x, br.y, 0.0f);
+                    Vector3f d(br.x, tl.y, 0.0f);
+
+                    auto& tris = cell.explored ? minimapFoggedBatch.triangles : minimapUnexploredBatch.triangles;
+                    tris.emplace_back(a, black);
+                    tris.emplace_back(b, black);
+                    tris.emplace_back(c, black);
+                    tris.emplace_back(a, black);
+                    tris.emplace_back(c, black);
+                    tris.emplace_back(d, black);
+                }
+            }
+
+            auto uiVpMatrix = chromeUiRenderService.getViewProjectionMatrix();
+            sceneContext.graphics->enableBlending();
+
+            {
+                const auto& shader = sceneContext.shaders->basicColor;
+                sceneContext.graphics->bindShader(shader.handle.get());
+                sceneContext.graphics->setUniformMatrix(shader.mvpMatrix, uiVpMatrix);
+
+                if (!minimapUnexploredBatch.triangles.empty())
+                {
+                    sceneContext.graphics->setUniformFloat(shader.alpha, 1.0f);
+                    auto mesh = sceneContext.graphics->createColoredMesh(minimapUnexploredBatch.triangles, GL_STREAM_DRAW);
+                    sceneContext.graphics->drawTriangles(mesh);
+                }
+
+                if (!minimapFoggedBatch.triangles.empty())
+                {
+                    sceneContext.graphics->setUniformFloat(shader.alpha, 0.5f);
+                    auto mesh = sceneContext.graphics->createColoredMesh(minimapFoggedBatch.triangles, GL_STREAM_DRAW);
+                    sceneContext.graphics->drawTriangles(mesh);
+                }
+            }
+
+            sceneContext.graphics->disableBlending();
+        }
+
         // draw minimap dots (only for visible or owned units)
         for (const auto& [unitId, unit] : simulation.units)
         {
-            if (!unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
+            if (fogOfWarEnabled && !unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
             {
                 continue;
             }
@@ -564,13 +646,17 @@ namespace rwe
     {
         auto worldToUi = worldUiRenderService.getInverseViewProjectionMatrix()
             * computeViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height());
+        renderBuildBoxes(unit, color, worldToUi);
+    }
+
+    void GameScene::renderBuildBoxes(const UnitState& unit, const Color& color, const Matrix4f& worldToUi)
+    {
         for (const auto& order : unit.orders)
         {
             if (const auto buildOrder = std::get_if<BuildOrder>(&order))
             {
                 const auto& unitType = buildOrder->unitType;
                 const auto& unitDefinition = simulation.unitDefinitions.at(unitType);
-                auto mc = simulation.getAdHocMovementClass(unitDefinition.movementCollisionInfo);
                 auto footprintRect = simulation.computeFootprintRegion(buildOrder->position, unitDefinition.movementCollisionInfo);
 
                 auto topLeftWorld = simulation.terrain.heightmapIndexToWorldCorner(footprintRect.x, footprintRect.y);
@@ -699,6 +785,11 @@ namespace rwe
         SpriteBatch flatFeatureShadowBatch;
         for (const auto& f : simulation.features)
         {
+            // Only draw features in explored areas
+            if (fogOfWarEnabled && !simulation.isPositionExplored(localPlayerId, f.second.position))
+            {
+                continue;
+            }
             const auto& featureDefinition = simulation.getFeatureDefinition(f.second.featureName);
             if (!featureDefinition.isStanding())
             {
@@ -744,6 +835,63 @@ namespace rwe
 
         worldRenderService.drawBatch(terrainOverlayBatch, viewProjectionMatrix);
 
+        // Draw fog of war overlay on terrain using a texture with bilinear filtering
+        if (fogOfWarEnabled && fogTextureWidth > 0 && localPlayerId.value < simulation.fogOfWar.size())
+        {
+            const auto& fog = simulation.fogOfWar[localPlayerId.value];
+
+            // Update fog texture data from simulation state
+            for (unsigned int fy = 0; fy < fogTextureHeight; ++fy)
+            {
+                for (unsigned int fx = 0; fx < fogTextureWidth; ++fx)
+                {
+                    const auto& cell = fog.grid.get(fx, fy);
+                    uint8_t alpha;
+                    if (cell.visibleCount > 0)
+                    {
+                        alpha = 0; // visible: fully transparent
+                    }
+                    else if (cell.explored)
+                    {
+                        alpha = 128; // fogged: semi-transparent
+                    }
+                    else
+                    {
+                        alpha = 255; // unexplored: fully opaque
+                    }
+                    fogTextureData[fy * fogTextureWidth + fx] = Color(0, 0, 0, alpha);
+                }
+            }
+
+            // Upload to GPU
+            sceneContext.graphics->updateTexture(fogTexture.get(), fogTextureWidth, fogTextureHeight, fogTextureData.data());
+
+            // Draw a single textured quad covering the entire terrain
+            auto terrainLeft = simScalarToFloat(simulation.terrain.leftInWorldUnits());
+            auto terrainTop = simScalarToFloat(simulation.terrain.topInWorldUnits());
+            auto terrainRight = simScalarToFloat(simulation.terrain.rightCutoffInWorldUnits());
+            auto terrainBottom = simScalarToFloat(simulation.terrain.bottomCutoffInWorldUnits());
+
+            std::vector<GlTexturedVertex> fogVerts{
+                {Vector3f(terrainLeft, 0.1f, terrainTop), Vector2f(0.0f, 0.0f)},
+                {Vector3f(terrainLeft, 0.1f, terrainBottom), Vector2f(0.0f, 1.0f)},
+                {Vector3f(terrainRight, 0.1f, terrainBottom), Vector2f(1.0f, 1.0f)},
+                {Vector3f(terrainRight, 0.1f, terrainBottom), Vector2f(1.0f, 1.0f)},
+                {Vector3f(terrainRight, 0.1f, terrainTop), Vector2f(1.0f, 0.0f)},
+                {Vector3f(terrainLeft, 0.1f, terrainTop), Vector2f(0.0f, 0.0f)},
+            };
+            auto fogMesh = sceneContext.graphics->createTexturedMesh(fogVerts, GL_STREAM_DRAW);
+
+            sceneContext.graphics->enableBlending();
+            const auto& shader = sceneContext.shaders->basicTexture;
+            sceneContext.graphics->bindShader(shader.handle.get());
+            sceneContext.graphics->setUniformMatrix(shader.mvpMatrix, viewProjectionMatrix);
+            sceneContext.graphics->setUniformVec4(shader.tint, 1.0f, 1.0f, 1.0f, 1.0f);
+            sceneContext.graphics->bindTexture(fogTexture.get());
+            sceneContext.graphics->drawTriangles(fogMesh);
+            sceneContext.graphics->disableBlending();
+        }
+
         auto interpolationFraction = static_cast<float>(millisecondsBuffer) / static_cast<float>(SimMillisecondsPerTick);
         ColoredMeshesBatch selectionRectBatch;
         for (const auto& selectedUnitId : selectedUnits)
@@ -759,7 +907,7 @@ namespace rwe
         UnitShadowMeshBatch unitShadowMeshBatch;
         for (const auto& [unitId, unit] : simulation.units)
         {
-            if (!unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
+            if (fogOfWarEnabled && !unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
             {
                 continue;
             }
@@ -775,6 +923,10 @@ namespace rwe
         }
         for (const auto& [_, feature] : simulation.features)
         {
+            if (fogOfWarEnabled && !simulation.isPositionExplored(localPlayerId, feature.position))
+            {
+                continue;
+            }
             const auto& position = feature.position;
             auto groundHeight = simulation.terrain.getHeightAt(position.x, position.z);
             if (position.y >= seaLevel && groundHeight < seaLevel)
@@ -792,7 +944,7 @@ namespace rwe
         for (const auto& [unitId, unit] : simulation.units)
         {
             // Hide enemy units not in line of sight
-            if (!unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
+            if (fogOfWarEnabled && !unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
             {
                 continue;
             }
@@ -802,6 +954,10 @@ namespace rwe
         }
         for (const auto& [_, feature] : simulation.features)
         {
+            if (fogOfWarEnabled && !simulation.isPositionExplored(localPlayerId, feature.position))
+            {
+                continue;
+            }
             drawMeshFeature(simulation.unitModelDefinitions, gameMediaDatabase, viewProjectionMatrix, feature, unitTextureAtlas.get(), unitTeamTextureAtlases, unitMeshBatch);
         }
         worldRenderService.drawUnitMeshBatch(unitMeshBatch, simScalarToFloat(seaLevel), simulation.gameTime.value);
@@ -809,7 +965,7 @@ namespace rwe
         ColoredMeshBatch lineProjectilesBatch;
         SpriteBatch spriteProjectilesBatch;
         UnitMeshBatch meshProjectilesBatch;
-        drawProjectiles(simulation, gameMediaDatabase, viewProjectionMatrix, simulation.projectiles, simulation.gameTime, interpolationFraction, unitTextureAtlas.get(), unitTeamTextureAtlases, lineProjectilesBatch, spriteProjectilesBatch, meshProjectilesBatch);
+        drawProjectiles(simulation, gameMediaDatabase, viewProjectionMatrix, simulation.projectiles, simulation.gameTime, interpolationFraction, unitTextureAtlas.get(), unitTeamTextureAtlases, lineProjectilesBatch, spriteProjectilesBatch, meshProjectilesBatch, localPlayerId, fogOfWarEnabled);
         worldRenderService.drawBatch(lineProjectilesBatch, viewProjectionMatrix);
         worldRenderService.drawUnitMeshBatch(meshProjectilesBatch, simScalarToFloat(seaLevel), simulation.gameTime.value);
         worldRenderService.drawSpriteBatch(spriteProjectilesBatch);
@@ -820,6 +976,10 @@ namespace rwe
         SpriteBatch featureShadowBatch;
         for (const auto& f : simulation.features)
         {
+            if (fogOfWarEnabled && !simulation.isPositionExplored(localPlayerId, f.second.position))
+            {
+                continue;
+            }
             const auto& featureDefinition = simulation.getFeatureDefinition(f.second.featureName);
             if (featureDefinition.isStanding())
             {
@@ -882,6 +1042,8 @@ namespace rwe
         if (isShiftDown())
         {
             auto singleSelectedUnit = getSingleSelectedUnit();
+            auto worldToUi = worldUiRenderService.getInverseViewProjectionMatrix()
+                * computeViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height());
 
             // if unit is a builder, show all other buildings being built
             if (shouldShowAllBuildBoxes(simulation, localPlayerId, singleSelectedUnit, hoveredUnit))
@@ -890,7 +1052,7 @@ namespace rwe
                 {
                     if (unit.isOwnedBy(localPlayerId))
                     {
-                        renderBuildBoxes(unit, Color(0, 0, 255));
+                        renderBuildBoxes(unit, Color(0, 0, 255), worldToUi);
                     }
                 }
             }
@@ -904,7 +1066,7 @@ namespace rwe
             // draw orders for all selected units
             for (const auto& selectedUnitId : selectedUnits)
             {
-                renderBuildBoxes(getUnit(selectedUnitId), Color(0, 255, 0));
+                renderBuildBoxes(getUnit(selectedUnitId), Color(0, 255, 0), worldToUi);
 
                 if (selectedUnitId != hoveredUnit)
                 {
@@ -938,6 +1100,23 @@ namespace rwe
                     * simVectorToFloat(unit.position);
                 worldUiRenderService.drawHealthBar(uiPos.x, uiPos.y, static_cast<float>(unit.hitPoints) / static_cast<float>(unitDefinition.maxHitPoints));
             }
+        }
+
+        // Draw self-destruct countdown above units
+        for (const auto& [_, unit] : simulation.units)
+        {
+            if (!unit.selfDestructCountdown)
+            {
+                continue;
+            }
+
+            auto uiPos = worldUiRenderService.getInverseViewProjectionMatrix()
+                * viewProjectionMatrix
+                * simVectorToFloat(unit.position);
+
+            auto secondsLeft = (unit.selfDestructCountdown->value + SimTicksPerSecond - 1) / SimTicksPerSecond;
+            auto countdownText = std::to_string(secondsLeft);
+            worldUiRenderService.drawText(uiPos.x - 4.0f, uiPos.y - 14.0f, countdownText, *guiFont, Color(255, 50, 50));
         }
 
         // Draw build box outline when a unit is selected to be built
@@ -1163,6 +1342,7 @@ namespace rwe
         ImGui::Checkbox("Occupied grid", &occupiedGridVisible);
         ImGui::Checkbox("Pathfinding visualisation", &pathfindingVisualisationVisible);
         ImGui::Checkbox("Movement class grid", &movementClassGridVisible);
+        ImGui::Checkbox("Fog of war", &fogOfWarEnabled);
         ImGui::InputInt("Side", &unitSpawnPlayer);
         if (ImGui::InputText("Spawn Unit", unitSpawnText, IM_ARRAYSIZE(unitSpawnText), ImGuiInputTextFlags_EnterReturnsTrue))
         {

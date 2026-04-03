@@ -55,6 +55,8 @@ namespace rwe
 
         tdf.readOrDefault("CanFly", u.canFly);
 
+        tdf.readOrDefault("HoverAttack", u.hoverAttack);
+
         tdf.readOrDefault("CruiseAlt", u.cruiseAlt);
 
         tdf.readOrDefault("Weapon1", u.weapon1);
