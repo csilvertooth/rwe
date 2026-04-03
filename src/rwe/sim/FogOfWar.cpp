@@ -6,7 +6,8 @@ namespace rwe
     std::vector<Point> computeVisibleCells(
         const Grid<unsigned char>& heightmap,
         int cx, int cy,
-        int sightRadiusCells)
+        int sightRadiusCells,
+        bool trueLOS)
     {
         std::vector<Point> result;
 
@@ -18,16 +19,43 @@ namespace rwe
         auto gridWidth = static_cast<int>(heightmap.getWidth());
         auto gridHeight = static_cast<int>(heightmap.getHeight());
 
-        // Eye height: terrain height at the unit's position plus a small offset
+        int radiusSq = sightRadiusCells * sightRadiusCells;
+
+        if (!trueLOS)
+        {
+            // Simple circular radius — no terrain blocking.
+            // This matches original TA behavior.
+            for (int dy = -sightRadiusCells; dy <= sightRadiusCells; ++dy)
+            {
+                for (int dx = -sightRadiusCells; dx <= sightRadiusCells; ++dx)
+                {
+                    if (dx * dx + dy * dy > radiusSq)
+                    {
+                        continue;
+                    }
+
+                    int tx = cx + dx;
+                    int ty = cy + dy;
+
+                    if (tx < 0 || tx >= gridWidth || ty < 0 || ty >= gridHeight)
+                    {
+                        continue;
+                    }
+
+                    result.emplace_back(tx, ty);
+                }
+            }
+
+            return result;
+        }
+
+        // True LOS: Bresenham ray-marching against terrain heights
         float eyeHeight = 0.0f;
         if (cx >= 0 && cx < gridWidth && cy >= 0 && cy < gridHeight)
         {
             eyeHeight = static_cast<float>(heightmap.get(cx, cy)) + 20.0f;
         }
 
-        int radiusSq = sightRadiusCells * sightRadiusCells;
-
-        // Scan all cells within the sight radius
         for (int dy = -sightRadiusCells; dy <= sightRadiusCells; ++dy)
         {
             for (int dx = -sightRadiusCells; dx <= sightRadiusCells; ++dx)
@@ -45,16 +73,13 @@ namespace rwe
                     continue;
                 }
 
-                // The unit's own cell is always visible
                 if (dx == 0 && dy == 0)
                 {
                     result.emplace_back(tx, ty);
                     continue;
                 }
 
-                // Bresenham-style LOS ray march from (cx,cy) to (tx,ty)
                 float targetHeight = static_cast<float>(heightmap.get(tx, ty));
-                float dist = std::sqrt(static_cast<float>(dx * dx + dy * dy));
 
                 bool blocked = false;
                 int steps = std::max(std::abs(dx), std::abs(dy));

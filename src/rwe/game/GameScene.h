@@ -304,6 +304,7 @@ namespace rwe
         FrameBufferInfo worldFrameBuffer;
 
         TextureHandle dodgeMask;
+        FrameBufferInfo fogFrameBuffer;
 
         TextureHandle fogTexture;
         std::vector<Color> fogTextureData;

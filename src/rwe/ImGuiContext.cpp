@@ -33,9 +33,12 @@ namespace rwe
 
     bool ImGuiContext::processEvent(const SDL_Event& event)
     {
+        // Always forward events to ImGui so it can track hover state
+        ImGui_ImplSDL3_ProcessEvent(&event);
+
+        // Only consume the event (prevent scene from seeing it) if ImGui wants it
         if (wantsEvent(*io, event))
         {
-            ImGui_ImplSDL3_ProcessEvent(&event);
             return true;
         }
         return false;

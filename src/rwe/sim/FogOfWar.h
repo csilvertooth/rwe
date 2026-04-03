@@ -25,11 +25,14 @@ namespace rwe
         }
     };
 
-    /** Compute the set of heightmap cells visible from (cx, cy) with given sight radius in cells. */
+    /** Compute the set of heightmap cells visible from (cx, cy) with given sight radius in cells.
+     *  If trueLOS is false (default), uses a simple circular radius without terrain blocking.
+     *  If trueLOS is true, uses Bresenham ray-marching against terrain heights. */
     std::vector<Point> computeVisibleCells(
         const Grid<unsigned char>& heightmap,
         int cx, int cy,
-        int sightRadiusCells);
+        int sightRadiusCells,
+        bool trueLOS = false);
 
     void addVisibility(PlayerFogOfWar& fog, const std::vector<Point>& cells);
     void removeVisibility(PlayerFogOfWar& fog, const std::vector<Point>& cells);

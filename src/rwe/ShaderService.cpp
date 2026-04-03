@@ -54,6 +54,7 @@ namespace rwe
 
         s.worldPost.handle = loadShader(graphics, "shaders/worldPost.vert", "shaders/worldPost.frag", texturedVertexAttribs);
         s.worldPost.dodgeMask = graphics.getUniformLocation(s.worldPost.handle.get(), "dodgeMask");
+        s.worldPost.fogMask = graphics.getUniformLocation(s.worldPost.handle.get(), "fogMask");
 
         return s;
     }

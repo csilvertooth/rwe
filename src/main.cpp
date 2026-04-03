@@ -140,7 +140,7 @@ namespace rwe
             "Annihilation Engine",
             desiredWindowWidth,
             desiredWindowHeight,
-            SDL_WINDOW_OPENGL | (fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
+            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | (fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
         if (window == nullptr)
         {
             throw std::runtime_error(SDL_GetError());
@@ -574,8 +574,8 @@ int main(int argc, char* argv[])
                 gameDataPaths.emplace_back(*localDataPath) /= "Data";
             }
 
-            auto screenWidth = args.getUint("width", 800);
-            auto screenHeight = args.getUint("height", 600);
+            auto screenWidth = args.getUint("width", 1280);
+            auto screenHeight = args.getUint("height", 960);
             auto fullscreen = args.getBool("fullscreen");
 
             auto pathMapping = constructDefaultPathMapping();

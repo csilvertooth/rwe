@@ -1883,7 +1883,7 @@ namespace rwe
                 sightRadiusCells = 10; // default sight if not specified
             }
 
-            unit.currentVisibleCells = computeVisibleCells(heightmap, heightmapPos.x, heightmapPos.y, sightRadiusCells);
+            unit.currentVisibleCells = computeVisibleCells(heightmap, heightmapPos.x, heightmapPos.y, sightRadiusCells, trueLOS);
             unit.lastVisibilityPosition = heightmapPos;
 
             // Add new visibility

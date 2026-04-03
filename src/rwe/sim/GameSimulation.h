@@ -277,6 +277,9 @@ namespace rwe
         /** Per-player fog of war visibility grids. */
         std::vector<PlayerFogOfWar> fogOfWar;
 
+        /** If true, use terrain height-based LOS. If false (default), use simple circular radius. */
+        bool trueLOS{false};
+
         Grid<unsigned char> metalGrid;
 
         Grid<bool> geoGrid;

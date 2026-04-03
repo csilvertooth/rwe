@@ -736,4 +736,9 @@ namespace rwe
     {
         glActiveTexture(GL_TEXTURE1);
     }
+
+    void GraphicsContext::setActiveTextureSlot2()
+    {
+        glActiveTexture(GL_TEXTURE2);
+    }
 }

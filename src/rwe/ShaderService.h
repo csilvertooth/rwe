@@ -66,6 +66,7 @@ namespace rwe
     {
         ShaderProgramHandle handle;
         UniformLocation dodgeMask;
+        UniformLocation fogMask;
     };
 
     class ShaderService

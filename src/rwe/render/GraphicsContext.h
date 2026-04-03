@@ -228,6 +228,7 @@ namespace rwe
 
         void setActiveTextureSlot0();
         void setActiveTextureSlot1();
+        void setActiveTextureSlot2();
 
     private:
         ShaderHandle compileShader(GLenum shaderType, const std::string& source);

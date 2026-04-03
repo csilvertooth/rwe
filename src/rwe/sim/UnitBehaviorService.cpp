@@ -569,6 +569,32 @@ namespace rwe
             return;
         }
 
+        // Air units can only fire when airborne
+        const auto& unitDefinition = sim->unitDefinitions.at(unit.unitType);
+        if (unitDefinition.canFly)
+        {
+            if (auto airPhysics = std::get_if<UnitPhysicsInfoAir>(&unit.physics))
+            {
+                if (!std::holds_alternative<AirMovementStateFlying>(airPhysics->movementState))
+                {
+                    return; // not airborne, can't fire
+                }
+
+                // Fighters (non-hoverAttack) can only fire when heading is roughly aligned with target
+                if (!unitDefinition.hoverAttack)
+                {
+                    auto toTarget = fireInfo->targetPosition - unit.position;
+                    auto targetAngle = UnitState::toRotation(toTarget);
+                    auto delta = angleBetween(unit.rotation, targetAngle);
+                    // Allow firing within ~30 degrees of forward
+                    if (delta.value > 5461)
+                    {
+                        return;
+                    }
+                }
+            }
+        }
+
         // wait for burst reload
         auto gameTime = sim->gameTime;
         if (gameTime < fireInfo->readyTime)

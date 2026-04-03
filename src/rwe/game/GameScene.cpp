@@ -260,9 +260,14 @@ namespace rwe
             fogTextureData.resize(fogTextureWidth * fogTextureHeight, Color(0, 0, 0, 255));
             fogTexture = sceneContext.graphics->createTexture(fogTextureWidth, fogTextureHeight, fogTextureData.data());
             // Override filter to GL_LINEAR for smooth fog edges
+            // Use CLAMP_TO_BORDER with transparent border so areas outside terrain are not fogged
             glBindTexture(GL_TEXTURE_2D, fogTexture.get().value);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+            float borderColor[] = {0.0f, 0.0f, 0.0f, 0.0f};
+            glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
         }
     }
 
@@ -578,7 +583,6 @@ namespace rwe
             }
 
             auto uiVpMatrix = chromeUiRenderService.getViewProjectionMatrix();
-            sceneContext.graphics->enableBlending();
 
             {
                 const auto& shader = sceneContext.shaders->basicColor;
@@ -600,7 +604,6 @@ namespace rwe
                 }
             }
 
-            sceneContext.graphics->disableBlending();
         }
 
         // draw minimap dots (only for visible or owned units)
@@ -785,11 +788,6 @@ namespace rwe
         SpriteBatch flatFeatureShadowBatch;
         for (const auto& f : simulation.features)
         {
-            // Only draw features in explored areas
-            if (fogOfWarEnabled && !simulation.isPositionExplored(localPlayerId, f.second.position))
-            {
-                continue;
-            }
             const auto& featureDefinition = simulation.getFeatureDefinition(f.second.featureName);
             if (!featureDefinition.isStanding())
             {
@@ -835,63 +833,6 @@ namespace rwe
 
         worldRenderService.drawBatch(terrainOverlayBatch, viewProjectionMatrix);
 
-        // Draw fog of war overlay on terrain using a texture with bilinear filtering
-        if (fogOfWarEnabled && fogTextureWidth > 0 && localPlayerId.value < simulation.fogOfWar.size())
-        {
-            const auto& fog = simulation.fogOfWar[localPlayerId.value];
-
-            // Update fog texture data from simulation state
-            for (unsigned int fy = 0; fy < fogTextureHeight; ++fy)
-            {
-                for (unsigned int fx = 0; fx < fogTextureWidth; ++fx)
-                {
-                    const auto& cell = fog.grid.get(fx, fy);
-                    uint8_t alpha;
-                    if (cell.visibleCount > 0)
-                    {
-                        alpha = 0; // visible: fully transparent
-                    }
-                    else if (cell.explored)
-                    {
-                        alpha = 128; // fogged: semi-transparent
-                    }
-                    else
-                    {
-                        alpha = 255; // unexplored: fully opaque
-                    }
-                    fogTextureData[fy * fogTextureWidth + fx] = Color(0, 0, 0, alpha);
-                }
-            }
-
-            // Upload to GPU
-            sceneContext.graphics->updateTexture(fogTexture.get(), fogTextureWidth, fogTextureHeight, fogTextureData.data());
-
-            // Draw a single textured quad covering the entire terrain
-            auto terrainLeft = simScalarToFloat(simulation.terrain.leftInWorldUnits());
-            auto terrainTop = simScalarToFloat(simulation.terrain.topInWorldUnits());
-            auto terrainRight = simScalarToFloat(simulation.terrain.rightCutoffInWorldUnits());
-            auto terrainBottom = simScalarToFloat(simulation.terrain.bottomCutoffInWorldUnits());
-
-            std::vector<GlTexturedVertex> fogVerts{
-                {Vector3f(terrainLeft, 0.1f, terrainTop), Vector2f(0.0f, 0.0f)},
-                {Vector3f(terrainLeft, 0.1f, terrainBottom), Vector2f(0.0f, 1.0f)},
-                {Vector3f(terrainRight, 0.1f, terrainBottom), Vector2f(1.0f, 1.0f)},
-                {Vector3f(terrainRight, 0.1f, terrainBottom), Vector2f(1.0f, 1.0f)},
-                {Vector3f(terrainRight, 0.1f, terrainTop), Vector2f(1.0f, 0.0f)},
-                {Vector3f(terrainLeft, 0.1f, terrainTop), Vector2f(0.0f, 0.0f)},
-            };
-            auto fogMesh = sceneContext.graphics->createTexturedMesh(fogVerts, GL_STREAM_DRAW);
-
-            sceneContext.graphics->enableBlending();
-            const auto& shader = sceneContext.shaders->basicTexture;
-            sceneContext.graphics->bindShader(shader.handle.get());
-            sceneContext.graphics->setUniformMatrix(shader.mvpMatrix, viewProjectionMatrix);
-            sceneContext.graphics->setUniformVec4(shader.tint, 1.0f, 1.0f, 1.0f, 1.0f);
-            sceneContext.graphics->bindTexture(fogTexture.get());
-            sceneContext.graphics->drawTriangles(fogMesh);
-            sceneContext.graphics->disableBlending();
-        }
-
         auto interpolationFraction = static_cast<float>(millisecondsBuffer) / static_cast<float>(SimMillisecondsPerTick);
         ColoredMeshesBatch selectionRectBatch;
         for (const auto& selectedUnitId : selectedUnits)
@@ -923,10 +864,6 @@ namespace rwe
         }
         for (const auto& [_, feature] : simulation.features)
         {
-            if (fogOfWarEnabled && !simulation.isPositionExplored(localPlayerId, feature.position))
-            {
-                continue;
-            }
             const auto& position = feature.position;
             auto groundHeight = simulation.terrain.getHeightAt(position.x, position.z);
             if (position.y >= seaLevel && groundHeight < seaLevel)
@@ -954,10 +891,6 @@ namespace rwe
         }
         for (const auto& [_, feature] : simulation.features)
         {
-            if (fogOfWarEnabled && !simulation.isPositionExplored(localPlayerId, feature.position))
-            {
-                continue;
-            }
             drawMeshFeature(simulation.unitModelDefinitions, gameMediaDatabase, viewProjectionMatrix, feature, unitTextureAtlas.get(), unitTeamTextureAtlases, unitMeshBatch);
         }
         worldRenderService.drawUnitMeshBatch(unitMeshBatch, simScalarToFloat(seaLevel), simulation.gameTime.value);
@@ -976,10 +909,6 @@ namespace rwe
         SpriteBatch featureShadowBatch;
         for (const auto& f : simulation.features)
         {
-            if (fogOfWarEnabled && !simulation.isPositionExplored(localPlayerId, f.second.position))
-            {
-                continue;
-            }
             const auto& featureDefinition = simulation.getFeatureDefinition(f.second.featureName);
             if (featureDefinition.isStanding())
             {
@@ -1008,6 +937,65 @@ namespace rwe
         sceneContext.graphics->bindFrameBufferColorBuffer(dodgeMask.get());
         sceneContext.graphics->clearColor();
         worldRenderService.drawFlashes(simulation.gameTime, flashes);
+
+        // Rasterize fog of war into screen-space fog buffer
+        sceneContext.graphics->bindFrameBufferColorBuffer(fogFrameBuffer.texture.get());
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        sceneContext.graphics->clearColor();
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // restore default
+        if (fogOfWarEnabled && fogTextureWidth > 0 && localPlayerId.value < simulation.fogOfWar.size())
+        {
+            const auto& fog = simulation.fogOfWar[localPlayerId.value];
+
+            for (unsigned int fy = 0; fy < fogTextureHeight; ++fy)
+            {
+                for (unsigned int fx = 0; fx < fogTextureWidth; ++fx)
+                {
+                    const auto& cell = fog.grid.get(fx, fy);
+                    uint8_t alpha;
+                    if (cell.visibleCount > 0)
+                    {
+                        alpha = 0;
+                    }
+                    else if (cell.explored)
+                    {
+                        alpha = 128;
+                    }
+                    else
+                    {
+                        alpha = 255;
+                    }
+                    fogTextureData[fy * fogTextureWidth + fx] = Color(0, 0, 0, alpha);
+                }
+            }
+
+            sceneContext.graphics->updateTexture(fogTexture.get(), fogTextureWidth, fogTextureHeight, fogTextureData.data());
+
+            // Draw a world-space quad covering the terrain, projected through the same
+            // VP matrix as the scene. This correctly maps fog grid cells to screen positions.
+            auto terrainLeft = simScalarToFloat(simulation.terrain.leftInWorldUnits());
+            auto terrainTop = simScalarToFloat(simulation.terrain.topInWorldUnits());
+            auto terrainRight = simScalarToFloat(simulation.terrain.rightCutoffInWorldUnits());
+            auto terrainBottom = simScalarToFloat(simulation.terrain.bottomCutoffInWorldUnits());
+
+            std::vector<GlTexturedVertex> fogVerts{
+                {Vector3f(terrainLeft, 0.0f, terrainTop), Vector2f(0.0f, 0.0f)},
+                {Vector3f(terrainLeft, 0.0f, terrainBottom), Vector2f(0.0f, 1.0f)},
+                {Vector3f(terrainRight, 0.0f, terrainBottom), Vector2f(1.0f, 1.0f)},
+                {Vector3f(terrainRight, 0.0f, terrainBottom), Vector2f(1.0f, 1.0f)},
+                {Vector3f(terrainRight, 0.0f, terrainTop), Vector2f(1.0f, 0.0f)},
+                {Vector3f(terrainLeft, 0.0f, terrainTop), Vector2f(0.0f, 0.0f)},
+            };
+            auto fogMesh = sceneContext.graphics->createTexturedMesh(fogVerts, GL_STREAM_DRAW);
+
+            const auto& shader = sceneContext.shaders->basicTexture;
+            sceneContext.graphics->bindShader(shader.handle.get());
+            sceneContext.graphics->setUniformMatrix(shader.mvpMatrix, viewProjectionMatrix);
+            sceneContext.graphics->setUniformVec4(shader.tint, 1.0f, 1.0f, 1.0f, 1.0f);
+            sceneContext.graphics->bindTexture(fogTexture.get());
+            sceneContext.graphics->drawTriangles(fogMesh);
+        }
+
         sceneContext.graphics->bindFrameBufferColorBuffer(worldFrameBuffer.texture.get());
 
         sceneContext.graphics->unbindFrameBuffer();
@@ -1022,9 +1010,12 @@ namespace rwe
         auto quadMesh = sceneContext.graphics->createUnitTexturedQuadFlipped(Rectangle2f::fromTLBR(1.0f, 0.0f, 0.0f, 1.0f));
         sceneContext.graphics->bindShader(sceneContext.shaders->worldPost.handle.get());
         sceneContext.graphics->setUniformInt(sceneContext.shaders->worldPost.dodgeMask, 1);
+        sceneContext.graphics->setUniformInt(sceneContext.shaders->worldPost.fogMask, 2);
         sceneContext.graphics->bindTexture(worldFrameBuffer.texture.get());
         sceneContext.graphics->setActiveTextureSlot1();
         sceneContext.graphics->bindTexture(dodgeMask.get());
+        sceneContext.graphics->setActiveTextureSlot2();
+        sceneContext.graphics->bindTexture(fogFrameBuffer.texture.get());
         sceneContext.graphics->setActiveTextureSlot0();
         sceneContext.graphics->drawTriangles(quadMesh);
 
@@ -1343,6 +1334,7 @@ namespace rwe
         ImGui::Checkbox("Pathfinding visualisation", &pathfindingVisualisationVisible);
         ImGui::Checkbox("Movement class grid", &movementClassGridVisible);
         ImGui::Checkbox("Fog of war", &fogOfWarEnabled);
+        ImGui::Checkbox("True LOS (terrain blocking)", &simulation.trueLOS);
         ImGui::InputInt("Side", &unitSpawnPlayer);
         if (ImGui::InputText("Spawn Unit", unitSpawnText, IM_ARRAYSIZE(unitSpawnText), ImGuiInputTextFlags_EnterReturnsTrue))
         {
@@ -4032,6 +4024,7 @@ namespace rwe
     {
         worldFrameBuffer = sceneContext.graphics->createFrameBuffer(worldViewport.width(), worldViewport.height());
         dodgeMask = sceneContext.graphics->createEmptyTexture(worldViewport.width(), worldViewport.height());
+        fogFrameBuffer = sceneContext.graphics->createFrameBuffer(worldViewport.width(), worldViewport.height());
     }
 
     void GameScene::nudgeCamera(int millisecondsElapsed, const Rectangle2f& cameraConstraint, int directionX, int directionZ)
