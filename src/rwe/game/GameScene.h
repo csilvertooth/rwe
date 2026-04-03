@@ -270,6 +270,9 @@ namespace rwe
         char unitSpawnText[20]{""};
         int unitSpawnPlayer{0};
 
+        bool cheatConsoleActive{false};
+        char cheatConsoleText[64]{""};
+
         std::mutex playingUnitChannelsLock;
         std::unordered_set<int> playingUnitChannels;
 
@@ -471,6 +474,9 @@ namespace rwe
         void renderWorld();
 
         void renderDebugWindow();
+
+        void renderCheatConsole();
+        void processCheatCommand(const std::string& command);
 
         void renderUnitOrders(UnitId unitId, bool drawLines);
 

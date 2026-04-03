@@ -1200,6 +1200,14 @@ namespace rwe
         {
             handleEscapeDown();
         }
+        else if (keysym.sym == SDLK_RETURN || keysym.sym == SDLK_KP_ENTER)
+        {
+            if (!cheatConsoleActive)
+            {
+                cheatConsoleActive = true;
+                cheatConsoleText[0] = '\0';
+            }
+        }
         else if (keysym.sym == SDLK_F10)
         {
             showDebugWindow = true;
@@ -1998,6 +2006,72 @@ namespace rwe
         }
 
         renderDebugWindow();
+        renderCheatConsole();
+    }
+
+    void GameScene::renderCheatConsole()
+    {
+        if (!cheatConsoleActive)
+        {
+            return;
+        }
+
+        ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(300, 0), ImGuiCond_Always);
+        ImGui::Begin("##CheatConsole", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar);
+        ImGui::SetKeyboardFocusHere();
+        if (ImGui::InputText("##cheat", cheatConsoleText, IM_ARRAYSIZE(cheatConsoleText), ImGuiInputTextFlags_EnterReturnsTrue))
+        {
+            std::string command(cheatConsoleText);
+            processCheatCommand(command);
+            cheatConsoleActive = false;
+            cheatConsoleText[0] = '\0';
+        }
+        if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Escape)))
+        {
+            cheatConsoleActive = false;
+            cheatConsoleText[0] = '\0';
+        }
+        ImGui::End();
+    }
+
+    void GameScene::processCheatCommand(const std::string& command)
+    {
+        if (command.empty() || command[0] != '+')
+        {
+            return;
+        }
+
+        auto arg = command.substr(1);
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg == "ATM")
+        {
+            // Give 10000 metal and energy
+            auto& player = simulation.getPlayer(localPlayerId);
+            player.metal += Metal(10000);
+            player.energy += Energy(10000);
+            return;
+        }
+
+        if (arg == "KILL")
+        {
+            // Kill selected units
+            for (const auto& selectedUnit : selectedUnits)
+            {
+                simulation.killUnit(selectedUnit);
+            }
+            return;
+        }
+
+        // Try to spawn a unit with the given name
+        if (isValidUnitType(simulation, arg))
+        {
+            if (auto terrainPos = getMouseTerrainCoordinate())
+            {
+                spawnCompletedUnit(arg, localPlayerId, *terrainPos);
+            }
+        }
     }
 
     std::optional<UnitId> GameScene::spawnUnit(const std::string& unitType, PlayerId owner, const SimVector& position, std::optional<const std::reference_wrapper<SimAngle>> rotation)
