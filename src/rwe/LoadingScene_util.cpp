@@ -220,6 +220,9 @@ namespace rwe
 
         weaponDefinition.paralyzer = tdf.paralyzer;
 
+        weaponDefinition.beamWeapon = tdf.beamWeapon;
+        weaponDefinition.beamDuration = SimScalar(tdf.duration);
+
         return weaponDefinition;
     }
 

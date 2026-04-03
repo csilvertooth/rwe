@@ -266,6 +266,9 @@ namespace rwe
 
         bool activated{false};
 
+        /** Self-destruct countdown in ticks. nullopt = not self-destructing. */
+        std::optional<GameTime> selfDestructCountdown;
+
         /** Accumulated paralyzer/EMP damage. Unit is stunned when this exceeds maxHitPoints. */
         unsigned int stunDamage{0};
         /** If true, unit is currently paralyzed and cannot act. */

@@ -719,6 +719,15 @@ namespace rwe
         projectile.targetUnit = targetUnit;
         projectile.paralyzer = weaponDefinition.paralyzer;
 
+        // Beam weapons: instant hit, no travel
+        if (weaponDefinition.beamWeapon)
+        {
+            projectile.position = position + direction * distanceToTarget;
+            projectile.velocity = SimVector(0_ss, 0_ss, 0_ss);
+            auto durationTicks = std::max(GameTime(1), GameTime(simScalarToUInt(weaponDefinition.beamDuration * SimScalar(30.0f))));
+            projectile.dieOnFrame = gameTime + durationTicks;
+        }
+
         return projectile;
     }
 
@@ -726,6 +735,14 @@ namespace rwe
     {
         auto projectile = createProjectileFromWeapon(owner, weapon, position, direction, distanceToTarget, targetUnit);
         projectile.sourceUnit = sourceUnit;
+
+        // Beam weapons apply damage instantly on spawn
+        const auto& weaponDefinition = weaponDefinitions.at(weapon.weaponType);
+        if (weaponDefinition.beamWeapon)
+        {
+            doProjectileImpact(projectile, ImpactType::Normal);
+        }
+
         projectiles.emplace(std::move(projectile));
     }
 
@@ -1765,6 +1782,17 @@ namespace rwe
             }
 
             runUnitCobScripts(*this, unitId);
+
+            // Self-destruct countdown
+            if (unit.selfDestructCountdown)
+            {
+                if (unit.selfDestructCountdown->value == 0)
+                {
+                    killUnit(unitId);
+                    continue;
+                }
+                unit.selfDestructCountdown = GameTime(unit.selfDestructCountdown->value - 1);
+            }
 
             // Decay stun damage over time (~7.5 per second = 1 every 4 ticks)
             if (unit.stunDamage > 0 && (gameTime.value % 4 == 0))

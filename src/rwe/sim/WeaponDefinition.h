@@ -61,5 +61,11 @@ namespace rwe
 
         /** If true, weapon paralyzes instead of damaging. */
         bool paralyzer{false};
+
+        /** If true, weapon is a beam/laser — instant hit, rendered as a line. */
+        bool beamWeapon{false};
+
+        /** Duration of beam display in seconds. */
+        SimScalar beamDuration{0};
     };
 }

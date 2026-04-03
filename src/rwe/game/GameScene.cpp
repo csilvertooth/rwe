@@ -1282,6 +1282,23 @@ namespace rwe
         {
             healthBarsVisible = !healthBarsVisible;
         }
+        else if (keysym.key == SDLK_D && isCtrlDown())
+        {
+            // Self-destruct selected units (5 second countdown = 150 ticks)
+            for (const auto& unitId : selectedUnits)
+            {
+                auto& unit = simulation.getUnitState(unitId);
+                if (!unit.selfDestructCountdown)
+                {
+                    unit.selfDestructCountdown = GameTime(150);
+                }
+                else
+                {
+                    // Cancel self-destruct if already counting down
+                    unit.selfDestructCountdown = std::nullopt;
+                }
+            }
+        }
         else if (keysym.key == SDLK_T)
         {
             startTrack();
