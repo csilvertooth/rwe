@@ -24,7 +24,7 @@ if(NOT RWE_GIT_DESCRIPTION MATCHES "^v([0-9]+\\.[0-9]+\\.[0-9]+)")
     message(FATAL_ERROR "Failed to parse version from Git")
 endif()
 
-project("Robot War Engine" VERSION ${CMAKE_MATCH_1})
+project("Annihilation Engine" VERSION ${CMAKE_MATCH_1})
 enable_testing()
 
 set(RC_ENABLE_CATCH ON CACHE BOOL "Enables Catch support in RapidCheck" FORCE)
