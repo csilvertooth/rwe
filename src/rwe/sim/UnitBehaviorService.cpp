@@ -539,6 +539,12 @@ namespace rwe
             },
             [&](const ProjectilePhysicsTypeBallistic&) {
                 return toDirection(fireInfo->heading + unit.rotation, -fireInfo->pitch);
+            },
+            [&](const ProjectilePhysicsTypeGuided&) {
+                return (fireInfo->targetPosition - firingPoint).normalized();
+            },
+            [&](const ProjectilePhysicsTypeDropped&) {
+                return SimVector(0_ss, -1_ss, 0_ss); // bombs drop straight down
             });
 
 

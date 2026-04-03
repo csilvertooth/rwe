@@ -18,5 +18,22 @@ namespace rwe
         SimScalar turnRate;
     };
 
-    using ProjectilePhysicsType = std::variant<ProjectilePhysicsTypeLineOfSight, ProjectilePhysicsTypeBallistic, ProjectilePhysicsTypeTracking>;
+    /** Guided missile: travels toward target position with turn rate, affected by gravity if not self-propelled. */
+    struct ProjectilePhysicsTypeGuided
+    {
+        SimScalar turnRate;
+        SimScalar acceleration;
+    };
+
+    /** Bomb: dropped from aircraft, affected by gravity, inherits aircraft velocity. */
+    struct ProjectilePhysicsTypeDropped
+    {
+    };
+
+    using ProjectilePhysicsType = std::variant<
+        ProjectilePhysicsTypeLineOfSight,
+        ProjectilePhysicsTypeBallistic,
+        ProjectilePhysicsTypeTracking,
+        ProjectilePhysicsTypeGuided,
+        ProjectilePhysicsTypeDropped>;
 }

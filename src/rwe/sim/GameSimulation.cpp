@@ -1231,6 +1231,39 @@ namespace rwe
                     }
                     auto vectorToTarget = (targetUnit->get().position - projectile.position);
                     projectile.velocity = rotateTowards(projectile.velocity, vectorToTarget, t.turnRate);
+                },
+                [&](const ProjectilePhysicsTypeGuided& g) {
+                    // Guided missiles: accelerate forward and turn toward target
+                    auto speed = projectile.velocity.length();
+                    if (g.acceleration > 0_ss)
+                    {
+                        speed += g.acceleration;
+                    }
+
+                    if (projectile.targetUnit)
+                    {
+                        auto targetUnit = tryGetUnitState(*projectile.targetUnit);
+                        if (targetUnit)
+                        {
+                            auto vectorToTarget = (targetUnit->get().position - projectile.position);
+                            projectile.velocity = rotateTowards(projectile.velocity, vectorToTarget, g.turnRate);
+                        }
+                        else
+                        {
+                            projectile.targetUnit = std::nullopt;
+                        }
+                    }
+
+                    // Maintain speed after rotation
+                    auto currentSpeed = projectile.velocity.length();
+                    if (currentSpeed > 0_ss)
+                    {
+                        projectile.velocity = projectile.velocity * (speed / currentSpeed);
+                    }
+                },
+                [&](const ProjectilePhysicsTypeDropped&) {
+                    // Bombs: gravity only, no propulsion
+                    projectile.velocity.y -= 112_ss / (30_ss * 30_ss);
                 });
 
             projectile.previousPosition = projectile.position;

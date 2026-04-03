@@ -44,6 +44,12 @@ namespace rwe
             },
             [&](const ProjectilePhysicsTypeBallistic&) {
                 return computeBallisticHeadingAndPitch(rotation, from, to, speed, gravity, zOffset);
+            },
+            [&](const ProjectilePhysicsTypeGuided&) {
+                return computeLineOfSightHeadingAndPitch(rotation, from, to);
+            },
+            [&](const ProjectilePhysicsTypeDropped&) {
+                return computeLineOfSightHeadingAndPitch(rotation, from, to);
             });
     }
 

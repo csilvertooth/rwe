@@ -583,7 +583,17 @@ namespace rwe
         weaponDefinition.burstInterval = SimScalar(tdf.burstRate);
         weaponDefinition.sprayAngle = SimAngle(tdf.sprayAngle);
 
-        if (tdf.tracks)
+        if (tdf.dropped)
+        {
+            weaponDefinition.physicsType = ProjectilePhysicsTypeDropped();
+        }
+        else if (tdf.guidance || tdf.cruise || tdf.vLaunch)
+        {
+            weaponDefinition.physicsType = ProjectilePhysicsTypeGuided{
+                SimScalar(tdf.turnRate),
+                SimScalar(static_cast<float>(tdf.weaponAcceleration) / (30.0f * 30.0f))};
+        }
+        else if (tdf.tracks)
         {
             weaponDefinition.physicsType = ProjectilePhysicsTypeTracking{SimScalar(tdf.turnRate)};
         }
