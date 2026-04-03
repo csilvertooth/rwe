@@ -26,6 +26,8 @@ namespace rwe
 
         virtual void onMouseWheel(MouseWheelEvent /*event*/) {}
 
+        virtual void onTextInput(const char* /*text*/) {}
+
         virtual ~Scene() = default;
     };
 }

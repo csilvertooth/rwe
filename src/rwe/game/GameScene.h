@@ -272,6 +272,7 @@ namespace rwe
 
         bool cheatConsoleActive{false};
         char cheatConsoleText[64]{""};
+        size_t cheatConsoleLen{0};
 
         std::mutex playingUnitChannelsLock;
         std::unordered_set<int> playingUnitChannels;
@@ -331,6 +332,8 @@ namespace rwe
         void onMouseMove(MouseMoveEvent event) override;
 
         void onMouseWheel(MouseWheelEvent event) override;
+
+        void onTextInput(const char* text) override;
 
         void update(int millisecondsElapsed) override;
 

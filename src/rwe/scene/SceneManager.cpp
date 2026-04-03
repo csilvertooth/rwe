@@ -93,6 +93,10 @@ namespace rwe
                 break;
             }
 
+            case SDL_TEXTINPUT:
+                currentScene.onTextInput(event.text.text);
+                break;
+
             default:
                 // skip unrecognised events
                 break;

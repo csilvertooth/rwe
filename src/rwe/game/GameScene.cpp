@@ -1162,9 +1162,32 @@ namespace rwe
 
     void GameScene::onKeyDown(const SDL_Keysym& keysym)
     {
-        // When ImGui has keyboard focus (cheat console), let it handle all input
-        if (ImGui::GetIO().WantCaptureKeyboard)
+        if (cheatConsoleActive)
         {
+            if (keysym.sym == SDLK_RETURN || keysym.sym == SDLK_KP_ENTER)
+            {
+                std::string command(cheatConsoleText);
+                processCheatCommand(command);
+                cheatConsoleActive = false;
+                cheatConsoleText[0] = '\0';
+                cheatConsoleLen = 0;
+                SDL_StopTextInput();
+            }
+            else if (keysym.sym == SDLK_ESCAPE)
+            {
+                cheatConsoleActive = false;
+                cheatConsoleText[0] = '\0';
+                cheatConsoleLen = 0;
+                SDL_StopTextInput();
+            }
+            else if (keysym.sym == SDLK_BACKSPACE)
+            {
+                if (cheatConsoleLen > 0)
+                {
+                    --cheatConsoleLen;
+                    cheatConsoleText[cheatConsoleLen] = '\0';
+                }
+            }
             return;
         }
 
@@ -1210,6 +1233,8 @@ namespace rwe
         {
             cheatConsoleActive = true;
             cheatConsoleText[0] = '\0';
+            cheatConsoleLen = 0;
+            SDL_StartTextInput();
         }
         else if (keysym.sym == SDLK_F10)
         {
@@ -1244,6 +1269,23 @@ namespace rwe
                     }
                 }
                 trackingOn = true;
+            }
+        }
+    }
+
+    void GameScene::onTextInput(const char* text)
+    {
+        if (!cheatConsoleActive)
+        {
+            return;
+        }
+        for (const char* p = text; *p != '\0'; ++p)
+        {
+            if (cheatConsoleLen < sizeof(cheatConsoleText) - 1)
+            {
+                cheatConsoleText[cheatConsoleLen] = *p;
+                ++cheatConsoleLen;
+                cheatConsoleText[cheatConsoleLen] = '\0';
             }
         }
     }
@@ -2020,21 +2062,17 @@ namespace rwe
         }
 
         ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(300, 0), ImGuiCond_Always);
-        ImGui::Begin("##CheatConsole", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar);
-        ImGui::SetKeyboardFocusHere();
-        if (ImGui::InputText("##cheat", cheatConsoleText, IM_ARRAYSIZE(cheatConsoleText), ImGuiInputTextFlags_EnterReturnsTrue))
-        {
-            std::string command(cheatConsoleText);
-            processCheatCommand(command);
-            cheatConsoleActive = false;
-            cheatConsoleText[0] = '\0';
-        }
-        if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Escape)))
-        {
-            cheatConsoleActive = false;
-            cheatConsoleText[0] = '\0';
-        }
+        ImGui::SetNextWindowSize(ImVec2(350, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.8f);
+        ImGui::Begin("##CheatConsole", nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs);
+
+        // Build display string with cursor
+        std::string display = std::string("> ") + cheatConsoleText + "_";
+        ImGui::TextUnformatted(display.c_str());
+
         ImGui::End();
     }
 
