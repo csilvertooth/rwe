@@ -719,6 +719,7 @@ add_custom_command(TARGET librwe PRE_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:librwe>/shaders")
 
 add_executable(rwe src/main.cpp)
+set_target_properties(rwe PROPERTIES OUTPUT_NAME "AnnihilationEngine")
 target_link_libraries(rwe librwe)
 
 add_executable(hpi_test src/hpi_test.cpp)

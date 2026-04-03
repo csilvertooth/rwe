@@ -128,7 +128,6 @@ namespace rwe
         TimeService timeService(getTimestamp());
 
         logger.info("Initializing SDL");
-        SDL_SetHint(SDL_HINT_APP_NAME, "Annihilation Engine");
         SdlContextManager sdlManager;
 
         // Set a reasonable number of audio channels
