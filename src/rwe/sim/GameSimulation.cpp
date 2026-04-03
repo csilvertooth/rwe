@@ -928,10 +928,22 @@ namespace rwe
 
     SimVector rotateTowards(const SimVector& v, const SimVector& target, SimScalar maxAngle)
     {
+        if (v.lengthSquared() == 0_ss || target.lengthSquared() == 0_ss)
+        {
+            return v;
+        }
+
         auto normV = v.normalizedOr(SimVector(0_ss, 0_ss, 1_ss));
         auto targetDirection = target.normalizedOr(SimVector(0_ss, 0_ss, 1_ss));
         auto cross = normV.cross(targetDirection);
-        auto dot = normV.dot(targetDirection);
+
+        // If cross product is zero, vectors are parallel — no rotation needed
+        if (cross.lengthSquared() == 0_ss)
+        {
+            return v;
+        }
+
+        auto dot = std::clamp(normV.dot(targetDirection), -1_ss, 1_ss);
         auto angle = rweMin(rweAcos(dot), angularToRadians(maxAngle));
 
         return Matrix4x<SimScalar>::rotationAxisAngle(cross, angle) * v;
@@ -1360,10 +1372,14 @@ namespace rwe
                     }
 
                     // Maintain speed after rotation
-                    auto currentSpeed = projectile.velocity.length();
-                    if (currentSpeed > 0_ss)
+                    auto currentSpeedSq = projectile.velocity.lengthSquared();
+                    if (currentSpeedSq > 0_ss && speed > 0_ss)
                     {
-                        projectile.velocity = projectile.velocity * (speed / currentSpeed);
+                        auto currentSpeed = rweSqrt(currentSpeedSq);
+                        if (currentSpeed > 0_ss)
+                        {
+                            projectile.velocity = projectile.velocity * (speed / currentSpeed);
+                        }
                     }
                 },
                 [&](const ProjectilePhysicsTypeDropped&) {
