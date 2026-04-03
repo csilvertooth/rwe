@@ -1,24 +1,15 @@
 #pragma once
 
-#include <boost/functional/hash.hpp>
 #include <memory>
-#include <rwe/collections/SimpleVectorMap.h>
-#include <rwe/io/cob/Cob.h>
-#include <rwe/io/fbi/UnitFbi.h>
 #include <rwe/io/gui/gui.h>
-#include <rwe/sim/FeatureDefinition.h>
-#include <rwe/sim/MovementClass.h>
-#include <rwe/sim/UnitModelDefinition.h>
+#include <string>
 #include <utility>
 
 
 namespace rwe
 {
-    class UnitDatabase
+    class BuilderGuisDatabase
     {
-    public:
-        using MovementClassIterator = typename std::unordered_map<std::string, MovementClass>::const_iterator;
-
     public:
         std::unordered_map<std::string, std::vector<std::vector<GuiEntry>>> builderGuisMap;
 

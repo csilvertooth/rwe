@@ -1,7 +1,5 @@
 #pragma once
 
-#include <boost/range/adaptor/map.hpp>
-#include <boost/version.hpp>
 #include <deque>
 #include <fstream>
 #include <functional>
@@ -10,21 +8,20 @@
 #include <rwe/AudioService.h>
 #include <rwe/CroppedViewport.h>
 #include <rwe/CursorService.h>
-#include <rwe/MeshService.h>
 #include <rwe/RenderService.h>
 #include <rwe/SceneContext.h>
 #include <rwe/TextureService.h>
 #include <rwe/UiRenderService.h>
 #include <rwe/Viewport.h>
+#include <rwe/game/BuilderGuisDatabase.h>
 #include <rwe/game/GameCameraState.h>
+#include <rwe/game/GameMediaDatabase.h>
 #include <rwe/game/GameNetworkService.h>
 #include <rwe/game/InGameSoundsInfo.h>
-#include <rwe/game/MeshDatabase.h>
 #include <rwe/game/Particle.h>
 #include <rwe/game/PlayerCommand.h>
 #include <rwe/game/PlayerCommandService.h>
 #include <rwe/game/SceneTime.h>
-#include <rwe/game/UnitDatabase.h>
 #include <rwe/game/UnitSoundType.h>
 #include <rwe/game/WeaponMediaInfo.h>
 #include <rwe/grid/DiscreteRect.h>
@@ -32,6 +29,7 @@
 #include <rwe/observable/BehaviorSubject.h>
 #include <rwe/scene/Scene.h>
 #include <rwe/scene/util.h>
+#include <rwe/sim/FeatureId.h>
 #include <rwe/sim/GameSimulation.h>
 #include <rwe/sim/OccupiedGrid.h>
 #include <rwe/sim/PlayerId.h>
@@ -190,7 +188,7 @@ namespace rwe
 
         GameCameraState worldCameraState;
 
-        MeshDatabase meshDatabase;
+        GameMediaDatabase gameMediaDatabase;
         SharedTextureHandle unitTextureAtlas;
         std::vector<SharedTextureHandle> unitTeamTextureAtlases;
 
@@ -201,7 +199,7 @@ namespace rwe
 
         MapTerrainGraphics terrainGraphics;
 
-        UnitDatabase unitDatabase;
+        BuilderGuisDatabase builderGuisDatabase;
 
         std::unique_ptr<GameNetworkService> gameNetworkService;
 
@@ -231,10 +229,28 @@ namespace rwe
         bool leftShiftDown{false};
         bool rightShiftDown{false};
 
-        bool trackingOn{false};
-        UnitId trackedUnitId;
+        struct CameraControlStateFree
+        {
+        };
+        struct CameraControlStateTrackingUnit
+        {
+        };
+        struct CameraControlStateMiddleMousePan
+        {
+            Point previousCursorPosition;
+        };
+
+        using CameraControlState = std::variant<CameraControlStateFree, CameraControlStateTrackingUnit, CameraControlStateMiddleMousePan>;
+
+        CameraControlState cameraControlState{CameraControlStateFree()};
+        // We hold onto trackedUnitId outside of CameraControlStateTrackingUnit
+        // because if you exit and re-enter tracking while having
+        // a group of units selected, the original game will resume
+        // tracking the next unit in the group.
+        std::optional<UnitId> trackedUnitId;
 
         std::optional<UnitId> hoveredUnit;
+        std::optional<FeatureId> hoveredFeature;
         std::unordered_set<UnitId> selectedUnits;
 
         std::optional<HoverBuildInfo> hoverBuildInfo;
@@ -299,14 +315,13 @@ namespace rwe
         GameScene(
             const SceneContext& sceneContext,
             std::unique_ptr<PlayerCommandService>&& playerCommandService,
-            MeshDatabase&& meshDatabase,
+            GameMediaDatabase&& meshDatabase,
             const GameCameraState& cameraState,
             SharedTextureHandle unitTextureAtlas,
             std::vector<SharedTextureHandle>&& unitTeamTextureAtlases,
             GameSimulation&& simulation,
             MapTerrainGraphics&& terrainGraphics,
-            UnitDatabase&& unitDatabase,
-            MeshService&& meshService,
+            BuilderGuisDatabase&& builderGuisDatabase,
             std::unique_ptr<GameNetworkService>&& gameNetworkService,
             const std::shared_ptr<Sprite>& minimap,
             const std::shared_ptr<SpriteSeries>& minimapDots,
@@ -321,9 +336,9 @@ namespace rwe
 
         void render() override;
 
-        void onKeyDown(const SDL_Keysym& keysym) override;
+        void onKeyDown(const SDL_KeyboardEvent& keysym) override;
 
-        void onKeyUp(const SDL_Keysym& keysym) override;
+        void onKeyUp(const SDL_KeyboardEvent& keysym) override;
 
         void onMouseDown(MouseButtonEvent event) override;
 
@@ -345,6 +360,7 @@ namespace rwe
 
         const MapTerrain& getTerrain() const;
 
+    private:
         GameTime getGameTime() const;
 
         void playUiSound(const AudioService::SoundHandle& sound);
@@ -377,7 +393,6 @@ namespace rwe
 
         void onChannelFinished(int channel);
 
-    private:
         static Matrix4f worldToMinimapMatrix(const MapTerrain& terrain, const Rectangle2f& minimapRect);
 
         static Matrix4f minimapToWorldMatrix(const MapTerrain& terrain, const Rectangle2f& minimapRect);
@@ -385,6 +400,7 @@ namespace rwe
         void tryTickGame();
 
         std::optional<UnitId> getUnitUnderCursor() const;
+        std::optional<FeatureId> getFeatureUnderCursor() const;
 
         Vector2f screenToWorldClipSpace(Point p) const;
 
@@ -395,6 +411,7 @@ namespace rwe
         Point getMousePosition() const;
 
         std::optional<UnitId> getFirstCollidingUnit(const Ray3f& ray) const;
+        std::optional<FeatureId> getFirstCollidingFeature(const Ray3f& ray) const;
 
         /**
          * Returns a value if the given ray intersects this unit
@@ -427,6 +444,8 @@ namespace rwe
         void setFireOrders(UnitId unitId, UnitFireOrders orders);
 
         void startTrack();
+
+        void startTrackInternal(const std::vector<UnitId>& unitIds);
 
         bool isCtrlDown() const;
 
@@ -530,7 +549,7 @@ namespace rwe
         template <typename T>
         std::optional<std::reference_wrapper<T>> findWithSidePrefix(UiPanel& p, const std::string& name)
         {
-            for (const auto& side : (*sceneContext.sideData | boost::adaptors::map_values))
+            for (const auto& [_, side] : *sceneContext.sideData)
             {
                 auto control = p.find<T>(side.namePrefix + name);
                 if (control)
@@ -553,5 +572,20 @@ namespace rwe
         void spawnWake(const Vector3f& position, const Vector3f& velocity, GameTime duration);
 
         void recreateWorldRenderTextures();
+
+        /**
+         * Handler for when the player nudges the camera
+         * e.g. via arrow keys or by moving the mouse cursor
+         * to the edge of the screen.
+         */
+        void nudgeCamera(int millisecondsElapsed, const Rectangle2f& cameraConstraint, int directionX, int directionZ);
+
+        /**
+         * Handler for when the player relocates the camera
+         * e.g. by clicking a location on the minimap.
+         */
+        void relocateCamera(const Rectangle2f& cameraConstraint, float x, float z);
+
+        std::optional<std::string> getUnitBuildButtonUnderCursor() const;
     };
 }

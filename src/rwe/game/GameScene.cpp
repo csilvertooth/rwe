@@ -1,6 +1,5 @@
 #include "GameScene.h"
 #include <algorithm>
-#include <boost/range/adaptor/map.hpp>
 #include <fstream>
 #include <functional>
 #include <rwe/CroppedViewport.h>
@@ -14,7 +13,7 @@
 #include <rwe/ui/UiStagedButton.h>
 #include <rwe/util/Index.h>
 #include <rwe/util/match.h>
-#include <spdlog/spdlog.h>
+#include <rwe/util/SimpleLogger.h>
 
 namespace rwe
 {
@@ -23,7 +22,7 @@ namespace rwe
         return simulation.unitDefinitions.find(unitType) != simulation.unitDefinitions.end();
     }
 
-    std::optional<std::reference_wrapper<const std::vector<GuiEntry>>> getBuilderGui(const UnitDatabase& db, const std::string& unitType, unsigned int page)
+    std::optional<std::reference_wrapper<const std::vector<GuiEntry>>> getBuilderGui(const BuilderGuisDatabase& db, const std::string& unitType, unsigned int page)
     {
         const auto& pages = db.tryGetBuilderGui(unitType);
         if (!pages)
@@ -42,7 +41,7 @@ namespace rwe
     }
 
     /** If the unit has no build gui, this will be zero. */
-    unsigned int getBuildPageCount(const UnitDatabase& db, const std::string& unitType)
+    unsigned int getBuildPageCount(const BuilderGuisDatabase& db, const std::string& unitType)
     {
         const auto& pages = db.tryGetBuilderGui(unitType);
         if (!pages)
@@ -200,14 +199,13 @@ namespace rwe
     GameScene::GameScene(
         const SceneContext& sceneContext,
         std::unique_ptr<PlayerCommandService>&& playerCommandService,
-        MeshDatabase&& meshDatabase,
+        GameMediaDatabase&& meshDatabase,
         const GameCameraState& cameraState,
         SharedTextureHandle unitTextureAtlas,
         std::vector<SharedTextureHandle>&& unitTeamTextureAtlases,
         GameSimulation&& simulation,
         MapTerrainGraphics&& terrainGraphics,
-        UnitDatabase&& unitDatabase,
-        MeshService&& meshService,
+        BuilderGuisDatabase&& builderGuisDatabase,
         std::unique_ptr<GameNetworkService>&& gameNetworkService,
         const std::shared_ptr<Sprite>& minimap,
         const std::shared_ptr<SpriteSeries>& minimapDots,
@@ -221,14 +219,14 @@ namespace rwe
           worldViewport(CroppedViewport(this->sceneContext.viewport, GuiSizeLeft, GuiSizeTop, GuiSizeRight, GuiSizeBottom)),
           playerCommandService(std::move(playerCommandService)),
           worldCameraState(cameraState),
-          meshDatabase(std::move(meshDatabase)),
+          gameMediaDatabase(std::move(meshDatabase)),
           unitTextureAtlas(unitTextureAtlas),
           unitTeamTextureAtlases(std::move(unitTeamTextureAtlases)),
           worldUiRenderService(this->sceneContext.graphics, this->sceneContext.shaders, &this->worldViewport),
           chromeUiRenderService(this->sceneContext.graphics, this->sceneContext.shaders, this->sceneContext.viewport),
           simulation(std::move(simulation)),
           terrainGraphics(std::move(terrainGraphics)),
-          unitDatabase(std::move(unitDatabase)),
+          builderGuisDatabase(std::move(builderGuisDatabase)),
           gameNetworkService(std::move(gameNetworkService)),
           minimap(minimap),
           minimapDots(minimapDots),
@@ -471,6 +469,46 @@ namespace rwe
                 }
             }
         }
+        else if (hoveredFeature)
+        {
+            const auto& feature = simulation.getFeature(*hoveredFeature);
+            const auto& featureDefinition = simulation.getFeatureDefinition(feature.featureName);
+            const auto& featureMediaInfo = gameMediaDatabase.getFeature(feature.featureName);
+
+            {
+                const auto& rect = localSideData._name;
+                auto text = featureMediaInfo.description;
+                if (featureDefinition.reclaimable)
+                {
+                    text += " ";
+                    if (featureDefinition.metal > 0)
+                    {
+                        text += " M:" + formatResource(Metal(featureDefinition.metal));
+                    }
+
+                    if (featureDefinition.energy > 0)
+                    {
+                        text += " E:" + formatResource(Energy(featureDefinition.energy));
+                    }
+                }
+                chromeUiRenderService.drawText(rect.x1, extraBottom + rect.y1, text, *guiFont);
+            }
+        }
+        else if (auto hoveredBuildButtonUnitType = getUnitBuildButtonUnderCursor(); hoveredBuildButtonUnitType)
+        {
+            const auto& unitDefinition = simulation.unitDefinitions.at(*hoveredBuildButtonUnitType);
+
+            {
+                const auto& rect = localSideData._name;
+                auto text = unitDefinition.unitName + "  M:" + formatResource(unitDefinition.buildCostMetal) + " E:" + formatResource(unitDefinition.buildCostEnergy);
+                chromeUiRenderService.drawText(rect.x1, extraBottom + rect.y1, text, *guiFont);
+            }
+
+            {
+                const auto& rect = localSideData.description;
+                chromeUiRenderService.drawText(rect.x1, extraBottom + rect.y1, unitDefinition.unitDescription, *guiFont);
+            }
+        }
 
         currentPanel->render(chromeUiRenderService);
     }
@@ -484,7 +522,7 @@ namespace rwe
         auto worldToMinimap = worldToMinimapMatrix(simulation.terrain, minimapRect);
 
         // draw minimap dots
-        for (const auto& unit : (simulation.units | boost::adaptors::map_values))
+        for (const auto& [_, unit] : simulation.units)
         {
             auto minimapPos = worldToMinimap * simVectorToFloat(unit.position);
             minimapPos.x = std::floor(minimapPos.x);
@@ -660,8 +698,8 @@ namespace rwe
             const auto& featureDefinition = simulation.getFeatureDefinition(f.second.featureName);
             if (!featureDefinition.isStanding())
             {
-                drawFeature(meshDatabase, f.second, featureDefinition, viewProjectionMatrix, flatFeatureBatch);
-                drawFeatureShadow(meshDatabase, f.second, featureDefinition, viewProjectionMatrix, flatFeatureShadowBatch);
+                drawFeature(gameMediaDatabase, f.second, featureDefinition, viewProjectionMatrix, flatFeatureBatch);
+                drawFeatureShadow(gameMediaDatabase, f.second, featureDefinition, viewProjectionMatrix, flatFeatureShadowBatch);
             }
         }
         worldRenderService.drawSpriteBatch(flatFeatureShadowBatch);
@@ -670,7 +708,7 @@ namespace rwe
         ColoredMeshBatch squareParticlesBatch;
         for (const auto& particle : particles)
         {
-            drawWakeParticle(meshDatabase, simulation.gameTime, viewProjectionMatrix, particle, squareParticlesBatch);
+            drawWakeParticle(gameMediaDatabase, simulation.gameTime, viewProjectionMatrix, particle, squareParticlesBatch);
         }
         worldRenderService.drawBatch(squareParticlesBatch, viewProjectionMatrix);
 
@@ -708,14 +746,14 @@ namespace rwe
         {
             const auto& unit = getUnit(selectedUnitId);
             const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
-            drawSelectionRect(meshDatabase, viewProjectionMatrix, unit, unitDefinition, interpolationFraction, selectionRectBatch);
+            drawSelectionRect(gameMediaDatabase, viewProjectionMatrix, unit, unitDefinition, interpolationFraction, selectionRectBatch);
         }
         worldRenderService.drawLineLoopsBatch(selectionRectBatch);
 
         auto seaLevel = simulation.terrain.getSeaLevel();
 
         UnitShadowMeshBatch unitShadowMeshBatch;
-        for (const auto& unit : (simulation.units | boost::adaptors::map_values))
+        for (const auto& [_, unit] : simulation.units)
         {
             const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
             const auto& modelDefinition = simulation.unitModelDefinitions.at(unitDefinition.objectName);
@@ -725,9 +763,9 @@ namespace rwe
             {
                 groundHeight = rweMax(groundHeight, seaLevel);
             }
-            drawUnitShadow(meshDatabase, viewProjectionMatrix, unit, unitDefinition, modelDefinition, interpolationFraction, simScalarToFloat(groundHeight), unitTextureAtlas.get(), unitTeamTextureAtlases, unitShadowMeshBatch);
+            drawUnitShadow(gameMediaDatabase, viewProjectionMatrix, unit, unitDefinition, modelDefinition, interpolationFraction, simScalarToFloat(groundHeight), unitTextureAtlas.get(), unitTeamTextureAtlases, unitShadowMeshBatch);
         }
-        for (const auto& feature : (simulation.features | boost::adaptors::map_values))
+        for (const auto& [_, feature] : simulation.features)
         {
             const auto& position = feature.position;
             auto groundHeight = simulation.terrain.getHeightAt(position.x, position.z);
@@ -736,29 +774,29 @@ namespace rwe
                 groundHeight = seaLevel;
             }
 
-            drawFeatureMeshShadow(simulation.unitModelDefinitions, meshDatabase, viewProjectionMatrix, feature, simScalarToFloat(groundHeight), unitTextureAtlas.get(), unitTeamTextureAtlases, unitShadowMeshBatch);
+            drawFeatureMeshShadow(simulation.unitModelDefinitions, gameMediaDatabase, viewProjectionMatrix, feature, simScalarToFloat(groundHeight), unitTextureAtlas.get(), unitTeamTextureAtlases, unitShadowMeshBatch);
         }
         worldRenderService.drawUnitShadowMeshBatch(unitShadowMeshBatch);
 
         sceneContext.graphics->enableDepthBuffer();
 
         UnitMeshBatch unitMeshBatch;
-        for (const auto& unit : (simulation.units | boost::adaptors::map_values))
+        for (const auto& [_, unit] : simulation.units)
         {
             const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
             const auto& unitModelDefinition = simulation.unitModelDefinitions.at(unitDefinition.objectName);
-            drawUnit(meshDatabase, viewProjectionMatrix, unit, unitDefinition, unitModelDefinition, getPlayer(unit.owner).color, interpolationFraction, unitTextureAtlas.get(), unitTeamTextureAtlases, unitMeshBatch);
+            drawUnit(gameMediaDatabase, viewProjectionMatrix, unit, unitDefinition, unitModelDefinition, getPlayer(unit.owner).color, interpolationFraction, unitTextureAtlas.get(), unitTeamTextureAtlases, unitMeshBatch);
         }
-        for (const auto& feature : (simulation.features | boost::adaptors::map_values))
+        for (const auto& [_, feature] : simulation.features)
         {
-            drawMeshFeature(simulation.unitModelDefinitions, meshDatabase, viewProjectionMatrix, feature, unitTextureAtlas.get(), unitTeamTextureAtlases, unitMeshBatch);
+            drawMeshFeature(simulation.unitModelDefinitions, gameMediaDatabase, viewProjectionMatrix, feature, unitTextureAtlas.get(), unitTeamTextureAtlases, unitMeshBatch);
         }
         worldRenderService.drawUnitMeshBatch(unitMeshBatch, simScalarToFloat(seaLevel), simulation.gameTime.value);
 
         ColoredMeshBatch lineProjectilesBatch;
         SpriteBatch spriteProjectilesBatch;
         UnitMeshBatch meshProjectilesBatch;
-        drawProjectiles(simulation, meshDatabase, viewProjectionMatrix, simulation.projectiles, simulation.gameTime, interpolationFraction, unitTextureAtlas.get(), unitTeamTextureAtlases, lineProjectilesBatch, spriteProjectilesBatch, meshProjectilesBatch);
+        drawProjectiles(simulation, gameMediaDatabase, viewProjectionMatrix, simulation.projectiles, simulation.gameTime, interpolationFraction, unitTextureAtlas.get(), unitTeamTextureAtlases, lineProjectilesBatch, spriteProjectilesBatch, meshProjectilesBatch);
         worldRenderService.drawBatch(lineProjectilesBatch, viewProjectionMatrix);
         worldRenderService.drawUnitMeshBatch(meshProjectilesBatch, simScalarToFloat(seaLevel), simulation.gameTime.value);
         worldRenderService.drawSpriteBatch(spriteProjectilesBatch);
@@ -772,8 +810,8 @@ namespace rwe
             const auto& featureDefinition = simulation.getFeatureDefinition(f.second.featureName);
             if (featureDefinition.isStanding())
             {
-                drawFeature(meshDatabase, f.second, featureDefinition, viewProjectionMatrix, featureBatch);
-                drawFeatureShadow(meshDatabase, f.second, featureDefinition, viewProjectionMatrix, featureShadowBatch);
+                drawFeature(gameMediaDatabase, f.second, featureDefinition, viewProjectionMatrix, featureBatch);
+                drawFeatureShadow(gameMediaDatabase, f.second, featureDefinition, viewProjectionMatrix, featureShadowBatch);
             }
         }
         worldRenderService.drawSpriteBatch(featureShadowBatch);
@@ -781,7 +819,7 @@ namespace rwe
 
         sceneContext.graphics->disableDepthTest();
         ColoredMeshBatch nanoLinesBatch;
-        for (const auto& unit : (simulation.units | boost::adaptors::map_values))
+        for (const auto& [_, unit] : simulation.units)
         {
             if (auto nanolatheTarget = unit.getActiveNanolatheTarget())
             {
@@ -820,7 +858,7 @@ namespace rwe
         SpriteBatch spriteParticlesBatch;
         for (const auto& particle : particles)
         {
-            drawSpriteParticle(meshDatabase, simulation.gameTime, viewProjectionMatrix, particle, spriteParticlesBatch);
+            drawSpriteParticle(gameMediaDatabase, simulation.gameTime, viewProjectionMatrix, particle, spriteParticlesBatch);
         }
         worldRenderService.drawSpriteBatch(spriteParticlesBatch);
         sceneContext.graphics->enableDepthTest();
@@ -865,7 +903,7 @@ namespace rwe
 
         if (healthBarsVisible)
         {
-            for (const UnitState& unit : (simulation.units | boost::adaptors::map_values))
+            for (const auto& [_, unit] : simulation.units)
             {
                 if (!unit.isOwnedBy(localPlayerId))
                 {
@@ -1160,27 +1198,27 @@ namespace rwe
         ImGui::End();
     }
 
-    void GameScene::onKeyDown(const SDL_Keysym& keysym)
+    void GameScene::onKeyDown(const SDL_KeyboardEvent& keysym)
     {
         if (cheatConsoleActive)
         {
-            if (keysym.sym == SDLK_RETURN || keysym.sym == SDLK_KP_ENTER)
+            if (keysym.key == SDLK_RETURN || keysym.key == SDLK_KP_ENTER)
             {
                 std::string command(cheatConsoleText);
                 processCheatCommand(command);
                 cheatConsoleActive = false;
                 cheatConsoleText[0] = '\0';
                 cheatConsoleLen = 0;
-                SDL_StopTextInput();
+                SDL_StopTextInput(SDL_GetKeyboardFocus());
             }
-            else if (keysym.sym == SDLK_ESCAPE)
+            else if (keysym.key == SDLK_ESCAPE)
             {
                 cheatConsoleActive = false;
                 cheatConsoleText[0] = '\0';
                 cheatConsoleLen = 0;
-                SDL_StopTextInput();
+                SDL_StopTextInput(SDL_GetKeyboardFocus());
             }
-            else if (keysym.sym == SDLK_BACKSPACE)
+            else if (keysym.key == SDLK_BACKSPACE)
             {
                 if (cheatConsoleLen > 0)
                 {
@@ -1191,52 +1229,52 @@ namespace rwe
             return;
         }
 
-        currentPanel->keyDown(KeyEvent(keysym.sym));
+        currentPanel->keyDown(KeyEvent(keysym.key));
 
-        if (keysym.sym == SDLK_UP)
+        if (keysym.key == SDLK_UP)
         {
             up = true;
         }
-        else if (keysym.sym == SDLK_DOWN)
+        else if (keysym.key == SDLK_DOWN)
         {
             down = true;
         }
-        else if (keysym.sym == SDLK_LEFT)
+        else if (keysym.key == SDLK_LEFT)
         {
             left = true;
         }
-        else if (keysym.sym == SDLK_RIGHT)
+        else if (keysym.key == SDLK_RIGHT)
         {
             right = true;
         }
-        else if (keysym.sym == SDLK_LCTRL)
+        else if (keysym.key == SDLK_LCTRL)
         {
             leftCtrlDown = true;
         }
-        else if (keysym.sym == SDLK_RCTRL)
+        else if (keysym.key == SDLK_RCTRL)
         {
             rightCtrlDown = true;
         }
-        else if (keysym.sym == SDLK_LSHIFT)
+        else if (keysym.key == SDLK_LSHIFT)
         {
             leftShiftDown = true;
         }
-        else if (keysym.sym == SDLK_RSHIFT)
+        else if (keysym.key == SDLK_RSHIFT)
         {
             rightShiftDown = true;
         }
-        else if (keysym.sym == SDLK_ESCAPE)
+        else if (keysym.key == SDLK_ESCAPE)
         {
             handleEscapeDown();
         }
-        else if (keysym.sym == SDLK_RETURN || keysym.sym == SDLK_KP_ENTER)
+        else if (keysym.key == SDLK_RETURN || keysym.key == SDLK_KP_ENTER)
         {
             cheatConsoleActive = true;
             cheatConsoleText[0] = '\0';
             cheatConsoleLen = 0;
-            SDL_StartTextInput();
+            SDL_StartTextInput(SDL_GetKeyboardFocus());
         }
-        else if (keysym.sym == SDLK_F10)
+        else if (keysym.key == SDLK_F10)
         {
             showDebugWindow = true;
         }
@@ -1244,11 +1282,11 @@ namespace rwe
         {
             healthBarsVisible = !healthBarsVisible;
         }
-        else if (keysym.sym == SDLK_t)
+        else if (keysym.key == SDLK_T)
         {
             startTrack();
         }
-        else if (keysym.sym == SDLK_c)
+        else if (keysym.key == SDLK_C)
         {
             if (isCtrlDown())
             {
@@ -1257,7 +1295,9 @@ namespace rwe
                 {
                     clearUnitSelection();
                 }
+
                 // Select commanders (edge case: debug mode allows spawning multiple commanders)
+                std::optional<UnitId> commanderUnitId;
                 for (const auto& [unitId, unit] : simulation.units)
                 {
                     const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
@@ -1265,10 +1305,14 @@ namespace rwe
                     {
                         selectAdditionalUnit(unitId);
                         // For multiple commanders, OTA selects all but always tracks only the last spawned (it won't cycle with repeated ctrl-c)
-                        trackedUnitId = unitId;
+                        commanderUnitId = unitId;
                     }
                 }
-                trackingOn = true;
+
+                if (commanderUnitId)
+                {
+                    startTrackInternal({*commanderUnitId});
+                }
             }
         }
     }
@@ -1290,39 +1334,39 @@ namespace rwe
         }
     }
 
-    void GameScene::onKeyUp(const SDL_Keysym& keysym)
+    void GameScene::onKeyUp(const SDL_KeyboardEvent& keysym)
     {
-        currentPanel->keyUp(KeyEvent(keysym.sym));
+        currentPanel->keyUp(KeyEvent(keysym.key));
 
-        if (keysym.sym == SDLK_UP)
+        if (keysym.key == SDLK_UP)
         {
             up = false;
         }
-        else if (keysym.sym == SDLK_DOWN)
+        else if (keysym.key == SDLK_DOWN)
         {
             down = false;
         }
-        else if (keysym.sym == SDLK_LEFT)
+        else if (keysym.key == SDLK_LEFT)
         {
             left = false;
         }
-        else if (keysym.sym == SDLK_RIGHT)
+        else if (keysym.key == SDLK_RIGHT)
         {
             right = false;
         }
-        else if (keysym.sym == SDLK_LCTRL)
+        else if (keysym.key == SDLK_LCTRL)
         {
             leftCtrlDown = false;
         }
-        else if (keysym.sym == SDLK_RCTRL)
+        else if (keysym.key == SDLK_RCTRL)
         {
             rightCtrlDown = false;
         }
-        else if (keysym.sym == SDLK_LSHIFT)
+        else if (keysym.key == SDLK_LSHIFT)
         {
             leftShiftDown = false;
         }
-        else if (keysym.sym == SDLK_RSHIFT)
+        else if (keysym.key == SDLK_RSHIFT)
         {
             rightShiftDown = false;
         }
@@ -1583,6 +1627,10 @@ namespace rwe
                     }
                 });
         }
+        else if (event.button == MouseButtonEvent::MouseButton::Middle)
+        {
+            cameraControlState = CameraControlStateMiddleMousePan{getMousePosition()};
+        }
     }
 
     void GameScene::onMouseUp(MouseButtonEvent event)
@@ -1706,16 +1754,13 @@ namespace rwe
                 },
                 [](const auto&) {});
         }
-    }
-
-    void GameScene::onMouseMove(MouseMoveEvent event)
-    {
-        currentPanel->mouseMove(event);
-    }
-
-    void GameScene::onMouseWheel(MouseWheelEvent event)
-    {
-        currentPanel->mouseWheel(event);
+        else if (event.button == MouseButtonEvent::MouseButton::Middle)
+        {
+            if (std::holds_alternative<CameraControlStateMiddleMousePan>(cameraControlState))
+            {
+                cameraControlState = CameraControlStateFree();
+            }
+        }
     }
 
     Rectangle2f computeCameraConstraint(const MapTerrain& terrain, float viewportWidth, float viewportHeight)
@@ -1745,6 +1790,30 @@ namespace rwe
         return Rectangle2f::fromTLBR(top, left, bottom, right);
     }
 
+    void GameScene::onMouseMove(MouseMoveEvent event)
+    {
+        if (auto middleMousePanningState = std::get_if<CameraControlStateMiddleMousePan>(&cameraControlState); middleMousePanningState)
+        {
+            auto cameraConstraint = computeCameraConstraint(simulation.terrain, worldCameraState.scaleDimension(worldViewport.width()), worldCameraState.scaleDimension(worldViewport.height()));
+
+            const auto& cameraPos = worldCameraState.position;
+
+            auto currentCursorPosition = Point(event.x, event.y);
+            auto delta = currentCursorPosition - middleMousePanningState->previousCursorPosition;
+
+            auto newCameraPos = cameraConstraint.clamp(Vector2f(cameraPos.x - delta.x, cameraPos.z - delta.y));
+            worldCameraState.position = Vector3f(newCameraPos.x, cameraPos.y, newCameraPos.y);
+
+            middleMousePanningState->previousCursorPosition = currentCursorPosition;
+        }
+        currentPanel->mouseMove(event);
+    }
+
+    void GameScene::onMouseWheel(MouseWheelEvent event)
+    {
+        currentPanel->mouseWheel(event);
+    }
+
     void GameScene::update(int millisecondsElapsed)
     {
         millisecondsBuffer += millisecondsElapsed;
@@ -1753,27 +1822,17 @@ namespace rwe
 
         // update camera position from keyboard arrows
         {
-            const float speed = CameraPanSpeed * millisecondsElapsed / 1000.0f;
             int directionX = (right ? 1 : 0) - (left ? 1 : 0);
             int directionZ = (down ? 1 : 0) - (up ? 1 : 0);
 
             if (directionX || directionZ)
             {
-                trackingOn = false;
-
-                auto dx = directionX * speed;
-                auto dz = directionZ * speed;
-                auto& cameraPos = worldCameraState.position;
-                auto newPos = cameraConstraint.clamp(Vector2f(cameraPos.x + dx, cameraPos.z + dz));
-
-                worldCameraState.position = Vector3f(newPos.x, cameraPos.y, newPos.y);
+                nudgeCamera(millisecondsElapsed, cameraConstraint, directionX, directionZ);
             }
         }
 
         // update camera position from edge scroll
         {
-            const float speed = CameraPanSpeed * millisecondsElapsed / 1000.0f;
-
             auto mousePosition = getMousePosition();
             auto directionX = mousePosition.x == sceneContext.viewport->left()
                 ? -1
@@ -1788,14 +1847,7 @@ namespace rwe
 
             if (directionX || directionZ)
             {
-                trackingOn = false;
-
-                auto dx = directionX * speed;
-                auto dz = directionZ * speed;
-                auto& cameraPos = worldCameraState.position;
-                auto newPos = cameraConstraint.clamp(Vector2f(cameraPos.x + dx, cameraPos.z + dz));
-
-                worldCameraState.position = Vector3f(newPos.x, cameraPos.y, newPos.y);
+                nudgeCamera(millisecondsElapsed, cameraConstraint, directionX, directionZ);
             }
         }
 
@@ -1804,8 +1856,6 @@ namespace rwe
         {
             if (std::holds_alternative<NormalCursorMode::DraggingMinimapState>(cursor->state))
             {
-                trackingOn = false;
-
                 // ok, the cursor is dragging the minimap.
                 // work out where the cursor is on the minimap,
                 // convert that to the world, then set the camera's position to there
@@ -1814,8 +1864,8 @@ namespace rwe
                 auto minimapToWorld = minimapToWorldMatrix(simulation.terrain, minimapRect);
                 auto mousePos = getMousePosition();
                 auto worldPos = minimapToWorld * Vector3f(static_cast<float>(mousePos.x) + 0.5f, static_cast<float>(mousePos.y) + 0.5, 0.0f);
-                auto newCameraPos = cameraConstraint.clamp(Vector2f(worldPos.x, worldPos.z));
-                worldCameraState.position = Vector3f(newCameraPos.x, worldCameraState.position.y, newCameraPos.y);
+
+                relocateCamera(cameraConstraint, worldPos.x, worldPos.z);
             }
         }
 
@@ -1824,10 +1874,10 @@ namespace rwe
             // TODO (kwh) - tracking of projectiles not yet implemented. E.g. while tracking Bertha or Nuke Silo,
             // screen should follow a projectile until it hits, then return to the tracking group
 
-            if (trackingOn)
+            if (std::holds_alternative<CameraControlStateTrackingUnit>(cameraControlState) && trackedUnitId)
             {
                 // get tracked unit position, or stop tracking if it's gone
-                auto unit = tryGetUnit(trackedUnitId);
+                auto unit = tryGetUnit(*trackedUnitId);
                 if (unit && !unit->get().isDead())
                 {
                     // Move camera... OTA behavior:
@@ -1875,6 +1925,7 @@ namespace rwe
         }
 
         hoveredUnit = getUnitUnderCursor();
+        hoveredFeature = getFeatureUnderCursor();
 
         if (auto buildCursor = std::get_if<BuildCursorMode>(&cursorMode.getValue()); buildCursor != nullptr && isCursorOverWorld())
         {
@@ -1888,7 +1939,7 @@ namespace rwe
                 const auto& unitDefinition = simulation.unitDefinitions.at(unitType);
                 auto mc = simulation.getAdHocMovementClass(unitDefinition.movementCollisionInfo);
                 auto footprintRect = simulation.computeFootprintRegion(pos, unitDefinition.movementCollisionInfo);
-                auto isValid = simulation.canBeBuiltAt(mc, footprintRect.x, footprintRect.y);
+                auto isValid = simulation.canBeBuiltAt(mc, unitDefinition.yardMap, unitDefinition.yardMapContainsGeo, footprintRect.x, footprintRect.y);
                 hoverBuildInfo = HoverBuildInfo{footprintRect, isValid};
             }
             else
@@ -1984,7 +2035,7 @@ namespace rwe
 
         auto bufferedCommandCount = playerCommandService->bufferedCommandCount(localPlayerId);
 
-        spdlog::get("rwe")->debug("Buffer levels (real/target) {0}/{1}", bufferedCommandCount, targetCommandBufferSize);
+        LOG_DEBUG << "Buffer levels (real/target) " << bufferedCommandCount << "/" << targetCommandBufferSize;
 
         // If we have too many commands buffered,
         // defer submitting commands this frame
@@ -2139,7 +2190,9 @@ namespace rwe
 
     void GameScene::setCameraPosition(const Vector3f& newPosition)
     {
-        worldCameraState.position = newPosition;
+        auto cameraConstraint = computeCameraConstraint(simulation.terrain, worldCameraState.scaleDimension(worldViewport.width()), worldCameraState.scaleDimension(worldViewport.height()));
+        auto constrainedPosition = cameraConstraint.clamp(Vector2f(newPosition.x, newPosition.z));
+        worldCameraState.position = Vector3f(constrainedPosition.x, newPosition.y, constrainedPosition.y);
     }
 
     const MapTerrain& GameScene::getTerrain() const
@@ -2218,7 +2271,7 @@ namespace rwe
         }
     }
 
-    std::optional<AudioService::SoundHandle> getSound(const GameSimulation& sim, const MeshDatabase& meshDb, const std::string& unitType, UnitSoundType soundType)
+    std::optional<AudioService::SoundHandle> getSound(const GameSimulation& sim, const GameMediaDatabase& meshDb, const std::string& unitType, UnitSoundType soundType)
     {
         const auto& unitDefinition = sim.unitDefinitions.at(unitType);
         const auto& soundClass = meshDb.getSoundClassOrDefault(unitDefinition.soundCategory);
@@ -2232,7 +2285,7 @@ namespace rwe
 
     void GameScene::playUnitNotificationSound(const PlayerId& playerId, const std::string& unitType, UnitSoundType soundType)
     {
-        auto sound = getSound(simulation, meshDatabase, unitType, soundType);
+        auto sound = getSound(simulation, gameMediaDatabase, unitType, soundType);
         if (sound)
         {
             playNotificationSound(playerId, *sound);
@@ -2251,10 +2304,10 @@ namespace rwe
     void GameScene::playWeaponStartSound(const Vector3f& position, const std::string& weaponType)
     {
 
-        const auto& weaponMediaInfo = meshDatabase.getWeapon(weaponType);
+        const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(weaponType);
         if (weaponMediaInfo.soundStart)
         {
-            auto sound = meshDatabase.tryGetSoundHandle(*weaponMediaInfo.soundStart);
+            auto sound = gameMediaDatabase.tryGetSoundHandle(*weaponMediaInfo.soundStart);
             if (sound)
             {
                 playSoundAt(position, *sound);
@@ -2264,14 +2317,14 @@ namespace rwe
 
     void GameScene::playWeaponImpactSound(const Vector3f& position, const std::string& weaponType, ImpactType impactType)
     {
-        const auto& weaponMediaInfo = meshDatabase.getWeapon(weaponType);
+        const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(weaponType);
         switch (impactType)
         {
             case ImpactType::Normal:
             {
                 if (weaponMediaInfo.soundHit)
                 {
-                    auto sound = meshDatabase.tryGetSoundHandle(*weaponMediaInfo.soundHit);
+                    auto sound = gameMediaDatabase.tryGetSoundHandle(*weaponMediaInfo.soundHit);
                     if (sound)
                     {
                         playSoundAt(position, *sound);
@@ -2283,7 +2336,7 @@ namespace rwe
             {
                 if (weaponMediaInfo.soundWater)
                 {
-                    auto sound = meshDatabase.tryGetSoundHandle(*weaponMediaInfo.soundWater);
+                    auto sound = gameMediaDatabase.tryGetSoundHandle(*weaponMediaInfo.soundWater);
                     if (sound)
                     {
                         playSoundAt(position, *sound);
@@ -2296,7 +2349,7 @@ namespace rwe
 
     void GameScene::spawnWeaponImpactExplosion(const Vector3f& position, const std::string& weaponType, ImpactType impactType)
     {
-        const auto& weaponMediaInfo = meshDatabase.getWeapon(weaponType);
+        const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(weaponType);
 
         switch (impactType)
         {
@@ -2396,7 +2449,7 @@ namespace rwe
         auto playerCommands = playerCommandService->tryPopCommands();
         if (!playerCommands)
         {
-            spdlog::get("rwe")->error("Blocked waiting for player commands");
+            LOG_ERROR << "Blocked waiting for player commands";
             return;
         }
 
@@ -2423,7 +2476,7 @@ namespace rwe
 
         updateFlashes();
 
-        updateParticles(meshDatabase, simulation.gameTime, particles);
+        updateParticles(gameMediaDatabase, simulation.gameTime, particles);
 
         auto winStatus = simulation.computeWinStatus();
         match(
@@ -2478,6 +2531,17 @@ namespace rwe
         return std::nullopt;
     }
 
+    std::optional<FeatureId> GameScene::getFeatureUnderCursor() const
+    {
+        if (!isCursorOverWorld())
+        {
+            return std::nullopt;
+        }
+
+        auto ray = screenToWorldRayUtil(computeInverseViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height()), screenToWorldClipSpace(getMousePosition()));
+        return getFirstCollidingFeature(ray);
+    }
+
     Vector2f GameScene::screenToWorldClipSpace(Point p) const
     {
         return worldViewport.toClipSpace(sceneContext.viewport->toOtherViewport(worldViewport, p));
@@ -2496,30 +2560,52 @@ namespace rwe
 
     Point GameScene::getMousePosition() const
     {
-        int x;
-        int y;
-        sceneContext.sdl->getMouseState(&x, &y);
-        return Point(x, y);
+        float fx;
+        float fy;
+        sceneContext.sdl->getMouseState(&fx, &fy);
+        return Point(static_cast<int>(fx), static_cast<int>(fy));
     }
 
     std::optional<UnitId> GameScene::getFirstCollidingUnit(const Ray3f& ray) const
     {
+        auto winnerIsMobile = false;
         auto bestDistance = std::numeric_limits<float>::infinity();
         std::optional<UnitId> it;
 
         for (const auto& entry : simulation.units)
         {
             const auto& unitDefinition = simulation.unitDefinitions.at(entry.second.unitType);
-            auto selectionMesh = meshDatabase.getSelectionCollisionMesh(unitDefinition.objectName);
+            auto selectionMesh = gameMediaDatabase.getSelectionCollisionMesh(unitDefinition.objectName);
             auto distance = selectionIntersect(entry.second, *selectionMesh.value(), ray);
-            if (distance && distance < bestDistance)
+            auto isMobile = unitDefinition.isMobile;
+            if (distance && ((!winnerIsMobile && isMobile) || distance < bestDistance))
             {
+                winnerIsMobile = isMobile;
                 bestDistance = *distance;
                 it = entry.first;
             }
         }
 
         return it;
+    }
+
+    std::optional<FeatureId> GameScene::getFirstCollidingFeature(const Ray3f& ray) const
+    {
+        auto intersect = simulation.intersectLineWithTerrain(floatToSimLine(ray.toLine()));
+        if (!intersect)
+        {
+            return std::nullopt;
+        }
+
+        auto heightmapPosition = simulation.terrain.worldToHeightmapCoordinate(*intersect);
+
+        auto cellContents = simulation.occupiedGrid.tryGet(heightmapPosition);
+        if (!cellContents)
+        {
+            return std::nullopt;
+        }
+
+        return cellContents->get().featureId;
     }
 
     std::optional<float> GameScene::selectionIntersect(const UnitState& unit, const CollisionMesh& mesh, const Ray3f& ray) const
@@ -2576,7 +2662,7 @@ namespace rwe
         else
         {
             const auto& unit = getUnit(unitId);
-            auto handle = getSound(simulation, meshDatabase, unit.unitType, UnitSoundType::Ok1);
+            auto handle = getSound(simulation, gameMediaDatabase, unit.unitType, UnitSoundType::Ok1);
             if (handle)
             {
                 playUiSound(*handle);
@@ -2605,7 +2691,7 @@ namespace rwe
         localPlayerCommandBuffer.push_back(PlayerUnitCommand(unitId, PlayerUnitCommand::Stop()));
 
         const auto& unit = getUnit(unitId);
-        auto handle = getSound(simulation, meshDatabase, unit.unitType, UnitSoundType::Ok1);
+        auto handle = getSound(simulation, gameMediaDatabase, unit.unitType, UnitSoundType::Ok1);
         if (handle)
         {
             playUiSound(*handle);
@@ -2674,19 +2760,49 @@ namespace rwe
 
     void GameScene::startTrack()
     {
-        if (selectedUnits.size())
+        // sort selection by unit id so repeated 'T' keydown cycles through all units in a group consistently
+        std::vector<UnitId> unitIds;
+        for (const auto& u : selectedUnits)
         {
-            // sort selection by unit id so repeated 'T' keydown cycles through all units in a group consistently
-            std::vector<UnitId> unitIds;
-            for (const auto& u : selectedUnits)
-            {
-                unitIds.push_back(u);
-            }
-            std::sort(unitIds.begin(), unitIds.end());
+            unitIds.push_back(u);
+        }
+        std::sort(unitIds.begin(), unitIds.end());
 
-            // If already tracking, check if currently tracked unit is in this selection. If it is, select the next id in the group.
+        startTrackInternal(unitIds);
+    }
+
+    void GameScene::startTrackInternal(const std::vector<UnitId>& unitIds)
+    {
+        // Only allow tracking in free camera mode or if we are already tracking.
+        auto canStartTracking = match(
+            cameraControlState,
+            [&](const CameraControlStateFree&) {
+                return true;
+            },
+            [&](const CameraControlStateTrackingUnit&) {
+                return true;
+            },
+            [&](const CameraControlStateMiddleMousePan&) {
+                return false;
+            });
+
+        if (!canStartTracking)
+        {
+            return;
+        }
+
+        // If 'T' is pressed and no units are selected, stop tracking.
+        if (unitIds.empty())
+        {
+            cameraControlState = CameraControlStateFree();
+            return;
+        }
+
+        // If already tracking, check if currently tracked unit is in this selection. If it is, select the next id in the group.
+        if (trackedUnitId)
+        {
             auto it = std::find(unitIds.begin(), unitIds.end(), trackedUnitId);
-            if (trackingOn && it != unitIds.end() && ++it != unitIds.end())
+            if (it != unitIds.end() && ++it != unitIds.end())
             {
                 trackedUnitId = *it;
             }
@@ -2694,12 +2810,13 @@ namespace rwe
             {
                 trackedUnitId = unitIds[0];
             }
-            trackingOn = true;
         }
         else
         {
-            trackingOn = false;
+            trackedUnitId = unitIds[0];
         }
+
+        cameraControlState = CameraControlStateTrackingUnit();
     }
 
     bool GameScene::isCtrlDown() const
@@ -2769,7 +2886,7 @@ namespace rwe
     {
         for (auto& [projectileId, projectile] : simulation.projectiles)
         {
-            const auto& weaponMediaInfo = meshDatabase.getWeapon(projectile.weaponType);
+            const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(projectile.weaponType);
             auto& renderInfo = projectileRenderInfos[projectileId];
 
             // emit smoke trail
@@ -2792,7 +2909,7 @@ namespace rwe
             match(
                 event,
                 [&](const FireWeaponEvent& e) {
-                    const auto& weaponMediaInfo = meshDatabase.getWeapon(e.weaponType);
+                    const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(e.weaponType);
 
                     if (e.shotNumber == 0 || weaponMediaInfo.soundTrigger)
                     {
@@ -2805,8 +2922,11 @@ namespace rwe
                     }
                 },
                 [&](const UnitArrivedEvent& e) {
-                    const auto& unit = simulation.getUnitState(e.unitId);
-                    playUnitNotificationSound(unit.owner, unit.unitType, UnitSoundType::Arrived1);
+                    auto unit = tryGetUnit(e.unitId);
+                    if (unit)
+                    {
+                        playUnitNotificationSound(unit->get().owner, unit->get().unitType, UnitSoundType::Arrived1);
+                    }
                 },
                 [&](const UnitActivatedEvent& e) {
                     auto unit = tryGetUnit(e.unitId);
@@ -2833,10 +2953,18 @@ namespace rwe
                     }
                 },
                 [&](const UnitCompleteEvent& e) {
-                    const auto& unit = getUnit(e.unitId);
-                    playUnitNotificationSound(unit.owner, unit.unitType, UnitSoundType::UnitComplete);
+                    auto unit = tryGetUnit(e.unitId);
+                    if (unit)
+                    {
+                        playUnitNotificationSound(unit->get().owner, unit->get().unitType, UnitSoundType::UnitComplete);
+                    }
                 },
                 [&](const EmitParticleFromPieceEvent& e) {
+                    if (!simulation.unitExists(e.unitId))
+                    {
+                        return;
+                    }
+
                     switch (e.sfxType)
                     {
                         case EmitParticleFromPieceEvent::SfxType::LightSmoke:
@@ -2860,9 +2988,12 @@ namespace rwe
                 },
                 [&](const UnitSpawnedEvent& e) {
                     // initialise local-player-specific UI data
-                    const auto& unit = getUnit(e.unitId);
-                    const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
-                    unitGuiInfos.insert_or_assign(e.unitId, UnitGuiInfo{unitDefinition.builder ? UnitGuiInfo::Section::Build : UnitGuiInfo::Section::Orders, 0});
+                    auto unit = tryGetUnit(e.unitId);
+                    if (unit)
+                    {
+                        const auto& unitDefinition = simulation.unitDefinitions.at(unit->get().unitType);
+                        unitGuiInfos.insert_or_assign(e.unitId, UnitGuiInfo{unitDefinition.builder ? UnitGuiInfo::Section::Build : UnitGuiInfo::Section::Orders, 0});
+                    }
                 },
 
                 [&](const UnitDiedEvent& e) {
@@ -2894,14 +3025,17 @@ namespace rwe
                     unitGuiInfos.erase(e.unitId);
                 },
                 [&](const UnitStartedBuildingEvent& e) {
-                    const auto& unit = getUnit(e.unitId);
-                    playUnitNotificationSound(unit.owner, unit.unitType, UnitSoundType::Build);
+                    auto unit = tryGetUnit(e.unitId);
+                    if (unit)
+                    {
+                        playUnitNotificationSound(unit->get().owner, unit->get().unitType, UnitSoundType::Build);
+                    }
                 },
                 [&](const ProjectileSpawnedEvent& e) {
                     projectileRenderInfos.insert({e.projectileId, ProjectileRenderInfo{getGameTime()}});
                 },
                 [&](const ProjectileDiedEvent& e) {
-                    const auto& weaponMediaInfo = meshDatabase.getWeapon(e.weaponType);
+                    const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(e.weaponType);
                     if (weaponMediaInfo.endSmoke)
                     {
                         createLightSmoke(simVectorToFloat(e.position));
@@ -2977,7 +3111,7 @@ namespace rwe
         const auto& unit = getUnit(unitId);
         const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
         auto pieceTransform = toFloatMatrix(simulation.getUnitPieceTransform(unitId, pieceName));
-        const auto& pieceMesh = meshDatabase.getUnitPieceMesh(unitDefinition.objectName, pieceName).value().get();
+        const auto& pieceMesh = gameMediaDatabase.getUnitPieceMesh(unitDefinition.objectName, pieceName).value().get();
         auto spawnPosition = pieceTransform * pieceMesh.firstVertexPosition;
         auto otherVertexPosition = pieceTransform * pieceMesh.secondVertexPosition;
 
@@ -3217,10 +3351,10 @@ namespace rwe
 
                 const auto& unit = getUnit(*selectedUnit);
                 auto& guiInfo = unitGuiInfos.at(*selectedUnit);
-                auto pages = getBuildPageCount(unitDatabase, unit.unitType);
+                auto pages = getBuildPageCount(builderGuisDatabase, unit.unitType);
                 guiInfo.currentBuildPage = (guiInfo.currentBuildPage + 1) % pages;
 
-                auto buildPanelDefinition = getBuilderGui(unitDatabase, unit.unitType, guiInfo.currentBuildPage);
+                auto buildPanelDefinition = getBuilderGui(builderGuisDatabase, unit.unitType, guiInfo.currentBuildPage);
                 if (buildPanelDefinition)
                 {
                     setNextPanel(createBuildPanel(unit.unitType + std::to_string(guiInfo.currentBuildPage + 1), *buildPanelDefinition, unit.getBuildQueueTotals()));
@@ -3238,11 +3372,11 @@ namespace rwe
 
                 const auto& unit = getUnit(*selectedUnit);
                 auto& guiInfo = unitGuiInfos.at(*selectedUnit);
-                auto pages = getBuildPageCount(unitDatabase, unit.unitType);
+                auto pages = getBuildPageCount(builderGuisDatabase, unit.unitType);
                 assert(pages != 0);
                 guiInfo.currentBuildPage = guiInfo.currentBuildPage == 0 ? pages - 1 : guiInfo.currentBuildPage - 1;
 
-                auto buildPanelDefinition = getBuilderGui(unitDatabase, unit.unitType, guiInfo.currentBuildPage);
+                auto buildPanelDefinition = getBuilderGui(builderGuisDatabase, unit.unitType, guiInfo.currentBuildPage);
                 if (buildPanelDefinition)
                 {
                     setNextPanel(createBuildPanel(unit.unitType + std::to_string(guiInfo.currentBuildPage + 1), *buildPanelDefinition, unit.getBuildQueueTotals()));
@@ -3262,7 +3396,7 @@ namespace rwe
                 auto& guiInfo = unitGuiInfos.at(*selectedUnit);
                 guiInfo.section = UnitGuiInfo::Section::Build;
 
-                auto buildPanelDefinition = getBuilderGui(unitDatabase, unit.unitType, guiInfo.currentBuildPage);
+                auto buildPanelDefinition = getBuilderGui(builderGuisDatabase, unit.unitType, guiInfo.currentBuildPage);
                 if (buildPanelDefinition)
                 {
                     setNextPanel(createBuildPanel(unit.unitType + std::to_string(guiInfo.currentBuildPage + 1), *buildPanelDefinition, unit.getBuildQueueTotals()));
@@ -3311,7 +3445,7 @@ namespace rwe
 
     bool GameScene::matchesWithSidePrefix(const std::string& suffix, const std::string& value) const
     {
-        for (const auto& side : (*sceneContext.sideData | boost::adaptors::map_values))
+        for (const auto& [_, side] : *sceneContext.sideData)
         {
             if (side.namePrefix + suffix == value)
             {
@@ -3397,7 +3531,7 @@ namespace rwe
         selectedUnits.insert(unitId);
 
         const auto& unit = getUnit(unitId);
-        auto selectionSound = getSound(simulation, meshDatabase, unit.unitType, UnitSoundType::Select1);
+        auto selectionSound = getSound(simulation, gameMediaDatabase, unit.unitType, UnitSoundType::Select1);
         if (selectionSound)
         {
             playUiSound(*selectionSound);
@@ -3431,7 +3565,7 @@ namespace rwe
         if (selectedUnits.size() == 1)
         {
             const auto& unit = getUnit(*units.begin());
-            auto selectionSound = getSound(simulation, meshDatabase, unit.unitType, UnitSoundType::Select1);
+            auto selectionSound = getSound(simulation, gameMediaDatabase, unit.unitType, UnitSoundType::Select1);
             if (selectionSound)
             {
                 playUiSound(*selectionSound);
@@ -3462,7 +3596,7 @@ namespace rwe
             onOff.next(unit.activated);
 
             const auto& guiInfo = getGuiInfo(*unitId);
-            auto buildPanelDefinition = getBuilderGui(unitDatabase, unit.unitType, guiInfo.currentBuildPage);
+            auto buildPanelDefinition = getBuilderGui(builderGuisDatabase, unit.unitType, guiInfo.currentBuildPage);
             if (guiInfo.section == UnitGuiInfo::Section::Build && buildPanelDefinition)
             {
                 setNextPanel(createBuildPanel(unit.unitType + std::to_string(guiInfo.currentBuildPage + 1), *buildPanelDefinition, unit.getBuildQueueTotals()));
@@ -3688,5 +3822,85 @@ namespace rwe
     {
         worldFrameBuffer = sceneContext.graphics->createFrameBuffer(worldViewport.width(), worldViewport.height());
         dodgeMask = sceneContext.graphics->createEmptyTexture(worldViewport.width(), worldViewport.height());
+    }
+
+    void GameScene::nudgeCamera(int millisecondsElapsed, const Rectangle2f& cameraConstraint, int directionX, int directionZ)
+    {
+        assert(directionX == 1 || directionX == 0 || directionX == -1);
+        assert(directionZ == 1 || directionZ == 0 || directionZ == -1);
+
+        // The player can only nudge the camera in free mode.
+        // If the camera is in a different mode, try and transition out of it.
+        cameraControlState = match(
+            cameraControlState,
+            [&](const CameraControlStateTrackingUnit&) -> CameraControlState {
+                return CameraControlStateFree();
+            },
+            [&](const CameraControlStateFree& s) -> CameraControlState {
+                return s;
+            },
+            [&](const CameraControlStateMiddleMousePan& s) -> CameraControlState {
+                // Middle mouse pan takes precedence over nudging the camera.
+                return s;
+            });
+
+        // Only nudge the camera if it is now in free mode.
+        match(
+            cameraControlState,
+            [&](const CameraControlStateFree&) {
+                const float speed = CameraPanSpeed * millisecondsElapsed / 1000.0f;
+
+                auto dx = directionX * speed;
+                auto dz = directionZ * speed;
+                const auto& cameraPos = worldCameraState.position;
+                auto newPos = cameraConstraint.clamp(Vector2f(cameraPos.x + dx, cameraPos.z + dz));
+
+                worldCameraState.position = Vector3f(newPos.x, cameraPos.y, newPos.y);
+            },
+            [&](const CameraControlStateTrackingUnit&) {
+                // do nothing
+            },
+            [&](const CameraControlStateMiddleMousePan&) {
+                // do nothing
+            });
+    }
+
+    void GameScene::relocateCamera(const Rectangle2f& cameraConstraint, float x, float z)
+    {
+        // The player can only relocate the camera in free mode.
+        // If the camera is in a different mode, try and transition out of it.
+        cameraControlState = match(
+            cameraControlState,
+            [&](const CameraControlStateTrackingUnit&) -> CameraControlState {
+                return CameraControlStateFree();
+            },
+            [&](const CameraControlStateFree& s) -> CameraControlState {
+                return s;
+            },
+            [&](const CameraControlStateMiddleMousePan& s) -> CameraControlState {
+                // Middle mouse pan takes precedence over relocating the camera.
+                return s;
+            });
+
+        auto newCameraPos = cameraConstraint.clamp(Vector2f(x, z));
+        worldCameraState.position = Vector3f(newCameraPos.x, worldCameraState.position.y, newCameraPos.y);
+    }
+
+    std::optional<std::string> GameScene::getUnitBuildButtonUnderCursor() const
+    {
+        auto cursorPosition = getMousePosition();
+        auto control = currentPanel->findAtPosition<UiStagedButton>(cursorPosition.x, cursorPosition.y);
+        if (!control)
+        {
+            return std::nullopt;
+        }
+
+        const auto& name = control->get().getName();
+        if (!isValidUnitType(simulation, name))
+        {
+            return std::nullopt;
+        }
+
+        return name;
     }
 }

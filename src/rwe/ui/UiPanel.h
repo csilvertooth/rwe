@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <algorithm>
 #include <rwe/observable/Subject.h>
 #include <rwe/ui/UiComponent.h>
 
@@ -90,6 +91,28 @@ namespace rwe
             }
 
             return const_cast<T&>(component->get());
+        }
+
+        template <typename T>
+        std::optional<std::reference_wrapper<const T>> findAtPosition(int x, int y) const
+        {
+            if (!contains(x, y))
+            {
+                return std::nullopt;
+            }
+
+            x -= posX;
+            y -= posY;
+
+            static_assert(std::is_base_of_v<UiComponent, T>);
+            auto it = std::find_if(children.begin(), children.end(), [&](const auto& c) {
+                return dynamic_cast<const T*>(c.get()) != nullptr && c->contains(x, y);
+            });
+            if (it == children.end())
+            {
+                return std::nullopt;
+            }
+            return dynamic_cast<const T&>(**it);
         }
 
         template <typename T>

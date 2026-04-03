@@ -28,6 +28,8 @@ namespace rwe
 
         void onCreate(UnitId unitId);
 
+        void updateWind(SimScalar windSpeed, SimAngle windDirection);
+
         void update(UnitId unitId);
 
         // FIXME: shouldn't really be public
@@ -65,6 +67,8 @@ namespace rwe
 
         void tryFireWeapon(UnitId id, unsigned int weaponIndex);
 
+        SimVector getUnitPositionWithCache(UnitState& s, UnitId unitId);
+
         void updateNavigation(UnitInfo unitInfo);
 
         void applyUnitSteering(UnitInfo unitInfo);
@@ -100,13 +104,15 @@ namespace rwe
 
         std::optional<SimVector> getTargetPosition(const UnitWeaponAttackTarget& target);
 
-        bool groundUnitMoveTo(UnitInfo unitInfo, const MovingStateGoal& goal);
+        PathDestination resolvePathDestination(UnitState& s, const MovingStateGoal& goal);
+
+        void groundUnitMoveTo(UnitInfo unitInfo, const MovingStateGoal& goal);
 
         bool flyingUnitMoveTo(UnitInfo unitInfo, const MovingStateGoal& goal);
 
         bool navigateTo(UnitInfo unitInfo, const NavigationGoal& goal);
 
-        bool moveTo(UnitInfo unitInfo, const MovingStateGoal& goal);
+        void moveTo(UnitInfo unitInfo, const MovingStateGoal& goal);
 
         bool attackTarget(UnitInfo unitInfo, const AttackTarget& target);
 

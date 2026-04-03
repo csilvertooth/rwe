@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <deque>
 #include <memory>
 #include <optional>
@@ -36,8 +37,11 @@ namespace rwe
     {
     };
 
-    using NavigationGoal = std::variant<SimVector, DiscreteRect, NavigationGoalLandingLocation>;
-    using MovingStateGoal = std::variant<SimVector, DiscreteRect>;
+    using NavigationGoal = std::variant<UnitId, SimVector, DiscreteRect, NavigationGoalLandingLocation>;
+
+    using MovingStateGoal = std::variant<UnitId, SimVector, DiscreteRect>;
+
+    using PathDestination = std::variant<SimVector, DiscreteRect>;
 
     struct UnitBehaviorStateIdle
     {
@@ -82,7 +86,8 @@ namespace rwe
 
     struct NavigationStateMoving
     {
-        MovingStateGoal destination;
+        MovingStateGoal movementGoal;
+        PathDestination pathDestination;
         std::optional<PathFollowingInfo> path;
         bool pathRequested;
     };
@@ -94,9 +99,17 @@ namespace rwe
 
     using NavigationState = std::variant<NavigationStateIdle, NavigationStateMoving, NavigationStateMovingToLandingSpot>;
 
+    struct UnitPositionCache
+    {
+        UnitId unitId;
+        SimVector position;
+        GameTime cachedAtTime;
+    };
+
     struct NavigationStateInfo
     {
         std::optional<NavigationGoal> desiredDestination;
+        std::optional<UnitPositionCache> unitPositionCache;
         NavigationState state;
     };
 
@@ -128,6 +141,8 @@ namespace rwe
     UnitOrder createAttackGroundOrder(const SimVector& target);
 
     bool isWater(YardMapCell cell);
+
+    bool isGeo(YardMapCell cell);
 
     bool isPassable(YardMapCell cell, bool yardMapOpen);
 

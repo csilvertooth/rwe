@@ -1,4 +1,5 @@
 #include "Point.h"
+#include <algorithm>
 
 namespace rwe
 {
@@ -26,9 +27,18 @@ namespace rwe
         return Point(x - rhs.x, y - rhs.y);
     }
 
-    std::size_t hash_value(const Point& p)
+    Point& Point::operator+=(const Point& rhs)
     {
-        return std::hash<Point>()(p);
+        this->x += rhs.x;
+        this->y += rhs.y;
+        return *this;
+    }
+
+    Point& Point::operator-=(const Point& rhs)
+    {
+        this->x -= rhs.x;
+        this->y -= rhs.y;
+        return *this;
     }
 
     int Point::maxSingleDimensionDistance(const Point& rhs) const

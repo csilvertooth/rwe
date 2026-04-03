@@ -43,7 +43,11 @@ namespace rwe
         };
         using MovementCollisionInfo = std::variant<NamedMovementClass, AdHocMovementClass>;
 
+        // FIXME: these two things should probably be in unit media info??
+        // They are not needed for sim.
         std::string unitName;
+        std::string unitDescription;
+
         std::string objectName;
 
         MovementCollisionInfo movementCollisionInfo;
@@ -116,7 +120,10 @@ namespace rwe
         Energy energyStorage;
         Metal metalStorage;
 
+        Energy windGenerator;
+
         std::optional<Grid<YardMapCell>> yardMap;
+        bool yardMapContainsGeo;
 
         std::string corpse;
 

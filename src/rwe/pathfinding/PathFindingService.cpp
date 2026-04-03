@@ -2,6 +2,7 @@
 #include <rwe/pathfinding/UnitPathFinder.h>
 #include <rwe/pathfinding/UnitPerimeterPathFinder.h>
 #include <rwe/pathfinding/pathfinding_utils.h>
+#include <rwe/util/Index.h>
 
 namespace rwe
 {
@@ -9,30 +10,42 @@ namespace rwe
 
     void PathFindingService::update(GameSimulation& simulation)
     {
+        int remainingBudget = 4000;
+
         auto& requests = simulation.pathRequests;
-        unsigned int tasksDone = 0;
-        while (!requests.empty() && tasksDone < MaxTasksPerTick)
+        while (!requests.empty() && remainingBudget > 0)
         {
             auto& request = requests.front();
 
-            auto& unit = simulation.getUnitState(request.unitId);
+            auto unit = simulation.tryGetUnitState(request.unitId);
+            if (!unit)
+            {
+                // Unit that made the request no longer exists.
+                // Possibly the unit died. Just skip it.
+                requests.pop_front();
+                continue;
+            }
 
-            if (auto movingState = std::get_if<NavigationStateMoving>(&unit.navigationState.state); movingState != nullptr)
+            if (auto movingState = std::get_if<NavigationStateMoving>(&unit->get().navigationState.state); movingState != nullptr)
             {
                 auto path = match(
-                    movingState->destination,
+                    movingState->pathDestination,
                     [&](const SimVector& pos) {
                         return findPath(simulation, request.unitId, pos);
                     },
                     [&](const DiscreteRect& pos) {
                         return findPath(simulation, request.unitId, pos);
                     });
+
                 movingState->path = PathFollowingInfo(std::move(path), simulation.gameTime);
                 movingState->pathRequested = false;
+
+                // HACK: we know that lastPathDebugInfo is set by the call to findPath,
+                // so we'll exploit it here to deduct from out budget.
+                remainingBudget -= getSize(lastPathDebugInfo.closedVertices);
             }
 
             requests.pop_front();
-            tasksDone += 1;
         }
     }
 

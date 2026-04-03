@@ -1,4 +1,14 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.16)
+
+# Allow submodules with older cmake_minimum_required to configure under CMake 4.x
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0")
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+endif()
+
+# Generate compile_commands.json for clangd-based editor integration
+# (VS Code, Zed, etc.). The .clangd file in the repo root points
+# editors to look for it in the build/ directory.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Type of build" FORCE)
@@ -27,21 +37,33 @@ endif()
 project("Annihilation Engine" VERSION ${CMAKE_MATCH_1})
 enable_testing()
 
-set(RC_ENABLE_CATCH ON CACHE BOOL "Enables Catch support in RapidCheck" FORCE)
-set(RC_ENABLE_BOOST ON CACHE BOOL "Enables Boost support in RapidCheck" FORCE)
-# rapidcheck relies on result_of, which is deprecated in favour of invoke_result.
-# MSVC hides it from their stdlib unless you supply this option.
-if(MSVC)
-    add_definitions(-D_HAS_DEPRECATED_RESULT_OF)
-endif()
+add_subdirectory("libs/catch2")
+
+set(RC_ENABLE_CATCH OFF CACHE BOOL "Enables Catch support in RapidCheck" FORCE)
+set(RC_ENABLE_BOOST OFF CACHE BOOL "Enables Boost support in RapidCheck" FORCE)
 if(APPLE)
     add_definitions(-DGL_SILENCE_DEPRECATION)
 endif()
 add_subdirectory("libs/rapidcheck")
+add_subdirectory("libs/rapidcheck/extras/catch")
 
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 set(JSON_Install OFF CACHE INTERNAL "")
 add_subdirectory("libs/json")
+
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
+add_subdirectory("libs/sdl3")
+
+set(SDL3MIXER_VENDORED ON CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+# SDL3_mixer's CMakeLists sets CMAKE_POSITION_INDEPENDENT_CODE ON in the cache
+# via option(), which leaks into all targets. We don't need PIC for our static
+# libraries or executables, so force it off after SDL3_mixer is configured.
+add_subdirectory("libs/sdl3_mixer")
+set(CMAKE_POSITION_INDEPENDENT_CODE OFF CACHE BOOL "" FORCE)
 
 function(find_windows_dll var dll)
     if(WIN32)
@@ -77,7 +99,7 @@ endfunction()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 if(NOT MSVC)
-    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD 20)
 endif()
 
 find_package(OpenGL REQUIRED)
@@ -95,26 +117,7 @@ if(MSVC)
     set(GLEW_LIBRARIES "${CMAKE_SOURCE_DIR}/libs/_msvc/glew-2.1.0/lib/Release/x64/glew32.lib")
     set(GLEW_INCLUDE_DIRS "libs/_msvc/glew-2.1.0/include")
 
-    set(Boost_INCLUDE_DIRS "libs/_msvc/boost_1_74_0")
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set(Boost_LIBRARIES "${CMAKE_SOURCE_DIR}/libs/_msvc/boost_1_74_0/lib64-msvc-14.2/libboost_filesystem-vc142-mt-gd-x64-1_74.lib;${CMAKE_SOURCE_DIR}/libs/_msvc/boost_1_74_0/lib64-msvc-14.2/libboost_system-vc142-mt-gd-x64-1_74.lib;${CMAKE_SOURCE_DIR}/libs/_msvc/boost_1_74_0/lib64-msvc-14.2/libboost_program_options-vc142-mt-gd-x64-1_74.lib")
-    else()
-        set(Boost_LIBRARIES "${CMAKE_SOURCE_DIR}/libs/_msvc/boost_1_74_0/lib64-msvc-14.2/libboost_filesystem-vc142-mt-x64-1_74.lib;${CMAKE_SOURCE_DIR}/libs/_msvc/boost_1_74_0/lib64-msvc-14.2/libboost_system-vc142-mt-x64-1_74.lib;${CMAKE_SOURCE_DIR}/libs/_msvc/boost_1_74_0/lib64-msvc-14.2/libboost_program_options-vc142-mt-x64-1_74.lib")
-    endif()
-    add_definitions(-DBOOST_DATE_TIME_NO_LIB)
-    add_definitions(-DBOOST_REGEX_NO_LIB)
-
-    set(SDL2_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/SDL2-2.0.7/lib/x64/SDL2.dll")
-    set(SDL2_LIBRARY "${CMAKE_SOURCE_DIR}/libs/_msvc/SDL2-2.0.7/lib/x64/SDL2.lib;${CMAKE_SOURCE_DIR}/libs/_msvc/SDL2-2.0.7/lib/x64/SDL2main.lib")
-    set(SDL2_INCLUDE_DIR "libs/_msvc/SDL2-2.0.7/include")
-
-    set(SDL2_IMAGE_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/SDL2_image-2.0.2/lib/x64/SDL2_image.dll")
-    set(SDL2_IMAGE_LIBRARIES "${CMAKE_SOURCE_DIR}/libs/_msvc/SDL2_image-2.0.2/lib/x64/SDL2_image.lib")
-    set(SDL2_IMAGE_INCLUDE_DIRS "libs/_msvc/SDL2_image-2.0.2/include")
-
-    set(SDL2_MIXER_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/SDL2_mixer-2.0.2/lib/x64/SDL2_mixer.dll")
-    set(SDL2_MIXER_LIBRARIES "${CMAKE_SOURCE_DIR}/libs/_msvc/SDL2_mixer-2.0.2/lib/x64/SDL2_mixer.lib")
-    set(SDL2_MIXER_INCLUDE_DIRS "libs/_msvc/SDL2_mixer-2.0.2/include")
+    # SDL3 and SDL3_mixer built from submodules above
 
     set(ZLIB_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/zlib-1.2.11/lib/zlib1.dll")
     set(ZLIB_LIBRARIES "${CMAKE_SOURCE_DIR}/libs/_msvc/zlib-1.2.11/lib/zdll.lib")
@@ -124,86 +127,32 @@ if(MSVC)
     set(PNG_LIBRARIES "${CMAKE_SOURCE_DIR}/libs/_msvc/lpng1634/lib/libpng16-16.lib")
     set(PNG_INCLUDE_DIRS "libs/_msvc/lpng1634/include")
 
-    set(FLAC_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/extras/libFLAC-8.dll")
-    set(JPEG_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/extras/libjpeg-9.dll")
-    set(MPG_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/extras/libmpg123-0.dll")
-    set(OGG_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/extras/libogg-0.dll")
-    set(TIFF_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/extras/libtiff-5.dll")
-    set(LZMA_DLL "LZMA_DLL-NOTFOUND") # bundled libtiff doesn't depend on liblzma
-    set(VORBIS_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/extras/libvorbis-0.dll")
-    set(VORBISFILE_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/extras/libvorbisfile-3.dll")
-    set(WEBP_DLL "${CMAKE_SOURCE_DIR}/libs/_msvc/extras/libwebp-7.dll")
 else()
-    set(Protobuf_LIBRARY "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/lib/libprotobuf.a")
-    set(Protobuf_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/include")
-    if(WIN32)
-        set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/bin/protoc.exe")
+    if(EXISTS "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/lib/libprotobuf.a")
+        set(Protobuf_LIBRARY "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/lib/libprotobuf.a")
+        set(Protobuf_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/include")
+        if(WIN32)
+            set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/bin/protoc.exe")
+        else()
+            set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/bin/protoc")
+        endif()
     else()
-        set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/bin/protoc")
+        find_package(Protobuf REQUIRED)
+        set(Protobuf_LIBRARY protobuf::libprotobuf)
+        set(Protobuf_INCLUDE_DIR ${Protobuf_INCLUDE_DIRS})
     endif()
 
     find_package(GLEW REQUIRED)
     find_windows_dll(GLEW_DLL "glew32.dll")
 
-    set(Boost_USE_STATIC_LIBS ON)
-    set(Boost_NO_BOOST_CMAKE ON)
-    find_package(Boost 1.54.0 REQUIRED COMPONENTS filesystem program_options)
-
-    find_package(SDL2 REQUIRED)
-    find_windows_dll(SDL2_DLL "SDL2.dll")
-    find_package(SDL2_image REQUIRED)
-    find_windows_dll(SDL2_IMAGE_DLL "SDL2_image.dll")
-    find_package(SDL2_mixer REQUIRED)
-    find_windows_dll(SDL2_MIXER_DLL "SDL2_mixer.dll")
+    # SDL3 and SDL3_mixer built from submodules above
 
     find_package(ZLIB REQUIRED)
     find_windows_dll(ZLIB_DLL "zlib1.dll")
     find_package(PNG REQUIRED)
     find_windows_dll(PNG_DLL "libpng16-16.dll")
 
-    find_windows_dll(FLAC_DLL "libFLAC.dll")
-    find_windows_dll(JBIG_DLL "libjbig-0.dll")
-    find_windows_dll(LERC_DLL "libLerc.dll")
-    find_windows_dll(SHARPYUV_DLL "libsharpyuv-0.dll")
-    find_windows_dll(JPEG_DLL "libjpeg-8.dll")
-    find_windows_dll(MPG_DLL "libmpg123-0.dll")
-    find_windows_dll(OGG_DLL "libogg-0.dll")
-    find_windows_dll(TIFF_DLL "libtiff-6.dll")
-    find_windows_dll(LZMA_DLL "liblzma-5.dll")
-    find_windows_dll(VORBIS_DLL "libvorbis-0.dll")
-    find_windows_dll(VORBISFILE_DLL "libvorbisfile-3.dll")
-    find_windows_dll(WEBP_DLL "libwebp-7.dll")
-    find_windows_dll(ZSTD_DLL "libzstd.dll")
-    find_windows_dll(MODPLUG_DLL "libmodplug-1.dll")
-    find_windows_dll(OPUSFILE_DLL "libopusfile-0.dll")
-    find_windows_dll(OPUS_DLL "libopus-0.dll")
-    find_windows_dll(READLINE_DLL "libreadline8.dll")
-    find_windows_dll(SNDFILE_DLL "libsndfile-1.dll")
-    find_windows_dll(VORBISENC_DLL "libvorbisenc-2.dll")
-    find_windows_dll(TERMCAP_DLL "libtermcap-0.dll")
-    find_windows_dll(GLIB2_DLL "libglib-2.0-0.dll")
-    find_windows_dll(GMODULE2_DLL "libgmodule-2.0-0.dll")
-    find_windows_dll(STDC++_DLL "libstdc++-6.dll")
-    find_windows_dll(GCC_S_SEH_DLL "libgcc_s_seh-1.dll")
-    find_windows_dll(WINPTHREAD_DLL "libwinpthread-1.dll")
-    find_windows_dll(INTL_DLL "libintl-8.dll")
-    find_windows_dll(ICONV_DLL "libiconv-2.dll")
-    find_windows_dll(SSP_DLL "libssp-0.dll")
-    find_windows_dll(DEFLATE_DLL "libdeflate.dll")
-    find_windows_dll(JXL_DLL "libjxl.dll")
-    find_windows_dll(BROTLIENC_DLL "libbrotlienc.dll")
-    find_windows_dll(BROTLIDEC_DLL "libbrotlidec.dll")
-    find_windows_dll(BROTLICOMMON_DLL "libbrotlicommon.dll")
-    find_windows_dll(HWY_DLL "libhwy.dll")
-    find_windows_dll(LCMS2_DLL "liblcms2-2.dll")
 endif()
-
-# We should have std::chrono everywhere,
-# but boost sometimes fails to detect this (e.g. with clang 5 on Ubuntu)
-# and falls back to using boost::chrono.
-# This enables the use of std::chrono explicitly
-# in boost.asio.
-add_definitions(-DBOOST_ASIO_HAS_STD_CHRONO)
 
 set(Protobuf_USE_STATIC_LIBS ON)
 find_package(Protobuf REQUIRED)
@@ -217,8 +166,8 @@ file(GLOB IMGUI_SOURCE_FILES
     )
 
 set(IMGUI_IMPL_FILES
-    ${PROJECT_SOURCE_DIR}/libs/imgui/examples/imgui_impl_sdl.cpp
-    ${PROJECT_SOURCE_DIR}/libs/imgui/examples/imgui_impl_opengl3.cpp
+    ${PROJECT_SOURCE_DIR}/libs/imgui/backends/imgui_impl_sdl3.cpp
+    ${PROJECT_SOURCE_DIR}/libs/imgui/backends/imgui_impl_opengl3.cpp
     )
 
 set(SOURCE_FILES
@@ -244,6 +193,8 @@ set(SOURCE_FILES
     src/rwe/LoadingNetworkService.h
     src/rwe/LoadingScene.cpp
     src/rwe/LoadingScene.h
+    src/rwe/LoadingScene_util.cpp
+    src/rwe/LoadingScene_util.h
     src/rwe/MainMenuModel.cpp
     src/rwe/MainMenuModel.h
     src/rwe/MainMenuScene.cpp
@@ -304,12 +255,16 @@ set(SOURCE_FILES
     src/rwe/fixed_point.h
     src/rwe/float_math.cpp
     src/rwe/float_math.h
+    src/rwe/game/BuilderGuisDatabase.cpp
+    src/rwe/game/BuilderGuisDatabase.h
     src/rwe/game/FeatureMediaInfo.cpp
     src/rwe/game/FeatureMediaInfo.h
     src/rwe/game/FlashEffect.cpp
     src/rwe/game/FlashEffect.h
     src/rwe/game/GameCameraState.cpp
     src/rwe/game/GameCameraState.h
+    src/rwe/game/GameMediaDatabase.cpp
+    src/rwe/game/GameMediaDatabase.h
     src/rwe/game/GameNetworkService.cpp
     src/rwe/game/GameNetworkService.h
     src/rwe/game/GameScene.cpp
@@ -320,10 +275,6 @@ set(SOURCE_FILES
     src/rwe/game/InGameSoundsInfo.h
     src/rwe/game/MapTerrainGraphics.cpp
     src/rwe/game/MapTerrainGraphics.h
-    src/rwe/game/MeshDatabase.cpp
-    src/rwe/game/MeshDatabase.h
-    src/rwe/game/MovementClassCollisionService.cpp
-    src/rwe/game/MovementClassCollisionService.h
     src/rwe/game/Particle.cpp
     src/rwe/game/Particle.h
     src/rwe/game/PlayerColorIndex.cpp
@@ -334,8 +285,6 @@ set(SOURCE_FILES
     src/rwe/game/ProjectileRenderType.h
     src/rwe/game/SceneTime.cpp
     src/rwe/game/SceneTime.h
-    src/rwe/game/UnitDatabase.cpp
-    src/rwe/game/UnitDatabase.h
     src/rwe/game/UnitPieceMeshInfo.cpp
     src/rwe/game/UnitPieceMeshInfo.h
     src/rwe/game/UnitSoundType.h
@@ -372,9 +321,6 @@ set(SOURCE_FILES
     src/rwe/io/_3do/_3do.h
     src/rwe/io/cob/Cob.cpp
     src/rwe/io/cob/Cob.h
-    src/rwe/io/fbi/FbiAnglePerTick.h
-    src/rwe/io/fbi/FbiDistancePerTick.h
-    src/rwe/io/fbi/FbiDistancePerTickSquared.h
     src/rwe/io/fbi/UnitFbi.h
     src/rwe/io/fbi/io.cpp
     src/rwe/io/fbi/io.h
@@ -398,6 +344,9 @@ set(SOURCE_FILES
     src/rwe/io/hpi/hpi_util.h
     src/rwe/io/io_util.cpp
     src/rwe/io/io_util.h
+    src/rwe/io/moveinfotdf/MovementClassTdf.h
+    src/rwe/io/moveinfotdf/io.cpp
+    src/rwe/io/moveinfotdf/io.h
     src/rwe/io/ota/ota.cpp
     src/rwe/io/ota/ota.h
     src/rwe/io/pcx/pcx.cpp
@@ -499,10 +448,9 @@ set(SOURCE_FILES
     src/rwe/sdl/SdlContextManager.cpp
     src/rwe/sdl/SdlContextManager.h
     src/rwe/sdl/SdlException.h
-    src/rwe/sdl/SdlImageContext.h
-    src/rwe/sdl/SdlImageException.h
     src/rwe/sdl/SdlMixerContext.h
     src/rwe/sdl/SdlMixerException.h
+    src/rwe/sim/Energy.cpp
     src/rwe/sim/Energy.h
     src/rwe/sim/FeatureDefinition.cpp
     src/rwe/sim/FeatureDefinition.h
@@ -521,10 +469,12 @@ set(SOURCE_FILES
     src/rwe/sim/MapTerrain.cpp
     src/rwe/sim/MapTerrain.h
     src/rwe/sim/Metal.h
-    src/rwe/sim/MovementClass.cpp
-    src/rwe/sim/MovementClass.h
+    src/rwe/sim/MovementClassCollisionService.cpp
+    src/rwe/sim/MovementClassCollisionService.h
+    src/rwe/sim/MovementClassDatabase.cpp
+    src/rwe/sim/MovementClassDatabase.h
+    src/rwe/sim/MovementClassDefinition.h
     src/rwe/sim/MovementClassId.h
-    src/rwe/sim/OccupiedGrid.cpp
     src/rwe/sim/OccupiedGrid.h
     src/rwe/sim/PlayerId.h
     src/rwe/sim/Projectile.cpp
@@ -621,8 +571,7 @@ endif()
 add_library(librwe STATIC ${SOURCE_FILES} ${PROTO_SOURCE_FILES} ${PROTO_HEADER_FILES})
 set_target_properties(librwe PROPERTIES PREFIX "")
 if(MSVC)
-    target_compile_options(librwe PUBLIC "/std:c++17" "/EHsc")
-    add_definitions(-D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)
+    target_compile_options(librwe PUBLIC "/std:c++20" "/EHsc")
 else()
     target_compile_options(librwe PUBLIC "-Wall" "-Wextra")
 endif()
@@ -630,15 +579,30 @@ target_include_directories(librwe PUBLIC "src")
 configure_file("src/rwe/config.h.in" "config/rwe/config.h" @ONLY)
 target_include_directories(librwe PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/config")
 
-target_include_directories(librwe PUBLIC ${Boost_INCLUDE_DIRS})
-target_link_libraries(librwe ${Boost_LIBRARIES})
+target_include_directories(librwe PUBLIC "libs/asio/asio/include")
+add_definitions(-DASIO_STANDALONE)
 if(WIN32)
-    # winsock needed for boost asio on windows
+    # winsock needed for asio on windows
     target_link_libraries(librwe ws2_32)
 endif()
 
 target_include_directories(librwe PUBLIC "libs/utfcpp/source")
-target_include_directories(librwe PUBLIC "libs/spdlog/include")
+
+target_precompile_headers(librwe PRIVATE
+    <algorithm>
+    <array>
+    <cassert>
+    <cstdint>
+    <functional>
+    <memory>
+    <optional>
+    <stdexcept>
+    <string>
+    <unordered_map>
+    <utility>
+    <variant>
+    <vector>
+)
 
 target_link_libraries(librwe OpenGL::GL)
 
@@ -646,21 +610,17 @@ target_copy_file(librwe ${GLEW_DLL})
 if(MSVC)
     target_link_libraries(librwe ${GLEW_LIBRARIES})
     target_include_directories(librwe PUBLIC ${GLEW_INCLUDE_DIRS})
-else()
+elseif(TARGET GLEW::glew)
+    target_link_libraries(librwe GLEW::glew)
+elseif(TARGET GLEW::GLEW)
     target_link_libraries(librwe GLEW::GLEW)
+else()
+    target_link_libraries(librwe ${GLEW_LIBRARIES})
+    target_include_directories(librwe PUBLIC ${GLEW_INCLUDE_DIRS})
 endif()
 
-target_copy_file(librwe ${SDL2_DLL})
-target_link_libraries(librwe ${SDL2_LIBRARY})
-target_include_directories(librwe PUBLIC ${SDL2_INCLUDE_DIR})
-
-target_copy_file(librwe ${SDL2_IMAGE_DLL})
-target_link_libraries(librwe ${SDL2_IMAGE_LIBRARIES})
-target_include_directories(librwe PUBLIC ${SDL2_IMAGE_INCLUDE_DIRS})
-
-target_copy_file(librwe ${SDL2_MIXER_DLL})
-target_link_libraries(librwe ${SDL2_MIXER_LIBRARIES})
-target_include_directories(librwe PUBLIC ${SDL2_MIXER_INCLUDE_DIRS})
+target_link_libraries(librwe SDL3::SDL3-static)
+target_link_libraries(librwe SDL3_mixer::SDL3_mixer)
 
 target_copy_file(librwe ${ZLIB_DLL})
 target_link_libraries(librwe ${ZLIB_LIBRARIES})
@@ -668,52 +628,29 @@ target_include_directories(librwe PUBLIC ${ZLIB_INCLUDE_DIRS})
 
 target_copy_file(librwe ${PNG_DLL})
 
-target_copy_file(librwe ${FLAC_DLL})
-target_copy_file(librwe ${JPEG_DLL})
-target_copy_file(librwe ${MPG_DLL})
-target_copy_file(librwe ${OGG_DLL})
-target_copy_file(librwe ${TIFF_DLL})
-if(WIN32 AND NOT MSVC)
-    target_copy_file(librwe ${LZMA_DLL}) # MSYS2 libtiff depends on liblzma
-    target_copy_file(librwe ${ZSTD_DLL}) # MSYS2 libtiff depends on zstd
-    target_copy_file(librwe ${DEFLATE_DLL}) # MSYS2 libtiff depends on deflate
-    target_copy_file(librwe ${JXL_DLL}) # MSYS2 SDL2_image depends on jxl
-    target_copy_file(librwe ${BROTLIENC_DLL})
-    target_copy_file(librwe ${BROTLIDEC_DLL})
-    target_copy_file(librwe ${BROTLICOMMON_DLL})
-    target_copy_file(librwe ${HWY_DLL})
-    target_copy_file(librwe ${LCMS2_DLL})
-    target_copy_file(librwe ${MODPLUG_DLL}) # MSYS2 SDL2_mixer depends on modplug
-    target_copy_file(librwe ${OPUSFILE_DLL}) # MSYS2 SDL2_mixer depends on opusfile
-    target_copy_file(librwe ${SSP_DLL}) # MSYS2 SDL2_mixer libflac depends on ssp
-    target_copy_file(librwe ${JBIG_DLL}) # MSYS2 SDL2_image depends on jbig
-    target_copy_file(librwe ${LERC_DLL}) # MSYS2 SDL2_image depends on Lerc
-    target_copy_file(librwe ${SHARPYUV_DLL}) # MSYS2 SDL2_image libwebp depends on sharpyuv
-    target_copy_file(librwe ${OPUS_DLL})
-    target_copy_file(librwe ${READLINE_DLL})
-    target_copy_file(librwe ${SNDFILE_DLL})
-    target_copy_file(librwe ${VORBISENC_DLL})
-    target_copy_file(librwe ${TERMCAP_DLL})
-    target_copy_file(librwe ${GLIB2_DLL})
-    target_copy_file(librwe ${GMODULE2_DLL})
-    target_copy_file(librwe ${STDC++_DLL})
-    target_copy_file(librwe ${GCC_S_SEH_DLL})
-    target_copy_file(librwe ${WINPTHREAD_DLL})
-    target_copy_file(librwe ${INTL_DLL})
-    target_copy_file(librwe ${ICONV_DLL})
-endif()
-target_copy_file(librwe ${VORBIS_DLL})
-target_copy_file(librwe ${VORBISFILE_DLL})
-target_copy_file(librwe ${WEBP_DLL})
 
-target_link_libraries(librwe ${Protobuf_LIBRARIES})
+if(TARGET protobuf::libprotobuf)
+    message(STATUS "Using protobuf::libprotobuf imported target")
+    target_link_libraries(librwe protobuf::libprotobuf)
+    # protobuf v32+ depends on abseil; link via pkg-config to propagate to consumers of this static lib
+    find_package(PkgConfig)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(ABSL IMPORTED_TARGET absl_log_internal_check_op)
+        if(ABSL_FOUND)
+            target_link_libraries(librwe PkgConfig::ABSL)
+        endif()
+    endif()
+else()
+    message(STATUS "Using Protobuf_LIBRARIES: ${Protobuf_LIBRARIES}")
+    target_link_libraries(librwe ${Protobuf_LIBRARIES})
+endif()
 target_include_directories(librwe PUBLIC ${Protobuf_INCLUDE_DIRS})
 target_include_directories(librwe PUBLIC ${CMAKE_CURRENT_BINARY_DIR}) # for generated headers
 
 target_link_libraries(librwe nlohmann_json::nlohmann_json)
 
 target_include_directories(librwe PUBLIC ${PROJECT_SOURCE_DIR}/libs/imgui)
-target_include_directories(librwe PUBLIC ${PROJECT_SOURCE_DIR}/libs/imgui/examples)
+target_include_directories(librwe PUBLIC ${PROJECT_SOURCE_DIR}/libs/imgui/backends)
 
 add_custom_command(TARGET librwe PRE_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:librwe>/shaders")
@@ -721,6 +658,17 @@ add_custom_command(TARGET librwe PRE_BUILD
 add_executable(rwe src/main.cpp)
 set_target_properties(rwe PROPERTIES OUTPUT_NAME "AnnihilationEngine")
 target_link_libraries(rwe librwe)
+
+if(UNIX AND NOT APPLE)
+    file(WRITE "${CMAKE_BINARY_DIR}/run.sh" "#!/bin/bash
+# The devbox-built binary links against Nix's libglvnd, which can't find
+# the system GPU driver (e.g. Mesa). Prepend system lib paths so it's
+# discovered. Not needed on macOS, which uses Apple's OpenGL framework
+# directly rather than libglvnd.
+LD_LIBRARY_PATH=/usr/lib:/usr/lib64:/usr/lib/x86_64-linux-gnu:\$LD_LIBRARY_PATH exec ./rwe \"\$@\"
+")
+    file(CHMOD "${CMAKE_BINARY_DIR}/run.sh" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+endif()
 
 add_executable(hpi_test src/hpi_test.cpp)
 target_link_libraries(hpi_test librwe)
@@ -732,7 +680,6 @@ add_executable(gaf_test src/gaf_test.cpp)
 target_link_libraries(gaf_test librwe)
 target_link_libraries(gaf_test ${PNG_LIBRARIES})
 target_include_directories(gaf_test PUBLIC ${PNG_INCLUDE_DIRS})
-target_include_directories(gaf_test PUBLIC libs/png++-0.2.9)
 if(WIN32)
     target_compile_definitions(gaf_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
@@ -741,7 +688,6 @@ add_executable(pcx_test src/pcx_test.cpp)
 target_link_libraries(pcx_test librwe)
 target_link_libraries(pcx_test ${PNG_LIBRARIES})
 target_include_directories(pcx_test PUBLIC ${PNG_INCLUDE_DIRS})
-target_include_directories(pcx_test PUBLIC libs/png++-0.2.9)
 if(WIN32)
     target_compile_definitions(pcx_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
@@ -750,7 +696,6 @@ add_executable(tnt_test src/tnt_test.cpp)
 target_link_libraries(tnt_test librwe)
 target_link_libraries(tnt_test ${PNG_LIBRARIES})
 target_include_directories(tnt_test PUBLIC ${PNG_INCLUDE_DIRS})
-target_include_directories(tnt_test PUBLIC libs/png++-0.2.9)
 if(WIN32)
     target_compile_definitions(tnt_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
@@ -765,7 +710,6 @@ add_executable(fnt_test src/fnt_test.cpp)
 target_link_libraries(fnt_test librwe)
 target_link_libraries(fnt_test ${PNG_LIBRARIES})
 target_include_directories(fnt_test PUBLIC ${PNG_INCLUDE_DIRS})
-target_include_directories(fnt_test PUBLIC libs/png++-0.2.9)
 if(WIN32)
     target_compile_definitions(fnt_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
@@ -774,7 +718,6 @@ add_executable(texture_test src/texture_test.cpp)
 target_link_libraries(texture_test librwe)
 target_link_libraries(texture_test ${PNG_LIBRARIES})
 target_include_directories(texture_test PUBLIC ${PNG_INCLUDE_DIRS})
-target_include_directories(texture_test PUBLIC libs/png++-0.2.9)
 if(WIN32)
     target_compile_definitions(texture_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
@@ -784,7 +727,6 @@ target_link_libraries(rwe_bridge PRIVATE librwe)
 target_link_libraries(rwe_bridge PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(rwe_bridge PRIVATE ${PNG_LIBRARIES})
 target_include_directories(rwe_bridge PUBLIC ${PNG_INCLUDE_DIRS})
-target_include_directories(rwe_bridge PUBLIC libs/png++-0.2.9)
 if(WIN32)
     target_compile_definitions(rwe_bridge PRIVATE __STDC_LIB_EXT1__=1)
 endif()
@@ -828,15 +770,17 @@ set(TEST_FILES
     src/rwe/sim/SimVector.test.cpp
     src/rwe/sim/UnitState_util.test.cpp
     src/rwe/sim/util.test.cpp
+    src/rwe/util/OpaqueArgs.test.cpp
     src/rwe/util/Result.test.cpp
+    src/rwe/util/SimpleLogger.test.cpp
     src/rwe/util/rwe_string.test.cpp
     )
 
-add_executable(rwe_test src/test.cpp ${TEST_FILES})
-target_include_directories(rwe_test PUBLIC ${PROJECT_SOURCE_DIR}/libs/catch2/single_include)
+add_executable(rwe_test ${TEST_FILES})
+target_link_libraries(rwe_test Catch2::Catch2WithMain)
 target_link_libraries(rwe_test rapidcheck_catch)
-target_link_libraries(rwe_test rapidcheck_boost)
 target_link_libraries(rwe_test librwe)
+target_precompile_headers(rwe_test REUSE_FROM librwe)
 add_test(NAME rwe_test COMMAND rwe_test)
 
 install(TARGETS rwe rwe_bridge

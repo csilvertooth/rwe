@@ -1,4 +1,5 @@
 #include "UnitBehaviorService_util.h"
+#include <algorithm>
 
 #include <stdexcept>
 
@@ -364,6 +365,9 @@ namespace rwe
                 {
                     return std::make_optional(s->landingLocation);
                 }
+                return std::optional<SimVector>();
+            },
+            [&](const UnitId&) {
                 return std::optional<SimVector>();
             });
 

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.16.0/.schema/devbox.schema.json",
+  "packages": [
+    "cmake",
+    "protobuf",
+    "glew",
+    "libpng",
+    "zlib",
+    "pkg-config",
+    "git",
+    "libX11.dev",
+    "libxext",
+    "libXi",
+    "libXfixes",
+    "libxrandr",
+    "libXScrnSaver",
+    "libXcursor",
+    "libXtst",
+    "libxcb",
+    "alsa-lib",
+    "pipewire",
+    "pulseaudio",
+    "wayland",
+    "wayland-protocols",
+    "libxkbcommon",
+    "libdecor"
+  ],
+  "shell": {
+    "init_hook": [
+      "echo 'RWE devbox shell ready.'"
+    ],
+    "scripts": {
+      "build": [
+        "mkdir -p build && cd build && cmake .. -G 'Unix Makefiles' -DCMAKE_BUILD_TYPE=Debug && make -j$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
+      ],
+      "test": [
+        "./build/rwe_test"
+      ]
+    }
+  }
+}

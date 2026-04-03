@@ -1,7 +1,8 @@
 #include "LoadingScene.h"
 #include <algorithm>
-#include <boost/interprocess/streams/bufferstream.hpp>
 #include <sstream>
+#include <rwe/util/SpanStream.h>
+#include <rwe/LoadingScene_util.h>
 #include <rwe/atlas_util.h>
 #include <rwe/collections/SimpleVectorMap.h>
 #include <rwe/game/FeatureMediaInfo.h>
@@ -10,11 +11,12 @@
 #include <rwe/geometry/CollisionMesh.h>
 #include <rwe/io/fbi/io.h>
 #include <rwe/io/featuretdf/io.h>
+#include <rwe/io/moveinfotdf/MovementClassTdf.h>
+#include <rwe/io/moveinfotdf/io.h>
 #include <rwe/io/ota/ota.h>
 #include <rwe/io/tdf/tdf.h>
 #include <rwe/io/tnt/TntArchive.h>
 #include <rwe/io/weapontdf/WeaponTdf.h>
-#include <rwe/pathfinding/PathFindingService.h>
 #include <rwe/sim/FeatureDefinitionId.h>
 #include <rwe/ui/UiLabel.h>
 #include <rwe/util/Index.h>
@@ -23,29 +25,33 @@ namespace rwe
 {
     const Viewport MenuUiViewport(0, 0, 640, 480);
 
-    std::unordered_map<std::string, CobScript> loadCobScripts(AbstractVirtualFileSystem& vfs)
+    std::seed_seq seedFromGameParameters(const GameParameters& params)
     {
-        std::unordered_map<std::string, CobScript> output;
+        std::vector<unsigned int> initialVec;
+        std::copy(params.mapName.begin(), params.mapName.end(), std::back_inserter(initialVec));
 
-        auto scripts = vfs.getFileNames("scripts", ".cob");
-
-        for (const auto& scriptName : scripts)
+        for (const auto& e : params.players)
         {
-            auto bytes = vfs.readFile("scripts/" + scriptName);
-            if (!bytes)
+            if (!e)
             {
-                throw std::runtime_error("File in listing could not be read: " + scriptName);
+                initialVec.push_back(0);
+                continue;
             }
 
-            boost::interprocess::bufferstream s(bytes->data(), bytes->size());
-            auto cob = parseCob(s);
-
-            auto scriptNameWithoutExtension = scriptName.substr(0, scriptName.size() - 4);
-
-            output.insert({toUpper(scriptNameWithoutExtension), std::move(cob)});
+            initialVec.push_back(e->color.value);
+            initialVec.push_back(e->energy.value);
+            initialVec.push_back(e->metal.value);
+            if (e->name)
+            {
+                std::copy(e->name->begin(), e->name->end(), std::back_inserter(initialVec));
+            }
+            else
+            {
+                initialVec.push_back(0);
+            }
         }
 
-        return output;
+        return std::seed_seq(initialVec.begin(), initialVec.end());
     }
 
     GameParameters::GameParameters(const std::string& mapName, unsigned int schemaIndex)
@@ -126,7 +132,7 @@ namespace rwe
         }
         networkService.start(gameParameters.localNetworkPort);
 
-        sceneContext.sceneManager->setNextScene(createGameScene(gameParameters.mapName, gameParameters.schemaIndex));
+        sceneContext.sceneManager->setNextScene(std::shared_ptr<Scene>(createGameScene(gameParameters.mapName, gameParameters.schemaIndex)));
 
         // wait for other players before starting
         networkService.setDoneLoading();
@@ -138,34 +144,6 @@ namespace rwe
         panel->render(scaledUiRenderService);
     }
 
-    std::seed_seq seedFromGameParameters(const GameParameters& params)
-    {
-        std::vector<unsigned int> initialVec;
-        std::copy(params.mapName.begin(), params.mapName.end(), std::back_inserter(initialVec));
-
-        for (const auto& e : params.players)
-        {
-            if (!e)
-            {
-                initialVec.push_back(0);
-                continue;
-            }
-
-            initialVec.push_back(e->color.value);
-            initialVec.push_back(e->energy.value);
-            initialVec.push_back(e->metal.value);
-            if (e->name)
-            {
-                std::copy(e->name->begin(), e->name->end(), std::back_inserter(initialVec));
-            }
-            else
-            {
-                initialVec.push_back(0);
-            }
-        }
-
-        return std::seed_seq(initialVec.begin(), initialVec.end());
-    }
 
     std::unique_ptr<GameScene> LoadingScene::createGameScene(const std::string& mapName, unsigned int schemaIndex)
     {
@@ -187,13 +165,16 @@ namespace rwe
             requiredFeatureNames.insert(f.second);
         }
 
-        auto [unitDatabase, meshDatabase, dataMaps, movementClassCollisionService] = createUnitDatabase(mapInfo.terrain, meshService, requiredFeatureNames);
+        auto dataMaps = loadDefinitions(meshService, requiredFeatureNames);
 
-        GameSimulation simulation(std::move(mapInfo.terrain), std::move(movementClassCollisionService), mapInfo.surfaceMetal);
+        auto movementClassCollisionService = createMovementClassCollisionService(mapInfo.terrain, dataMaps.movementClassDatabase);
+
+        GameSimulation simulation(std::move(mapInfo.terrain), mapInfo.surfaceMetal, std::max(0, mapInfo.minWindSpeed), std::min(mapInfo.maxWindSpeed, MaxUtilizableWindSpeed));
 
         simulation.unitDefinitions = std::move(dataMaps.unitDefinitions);
         simulation.weaponDefinitions = std::move(dataMaps.weaponDefinitions);
-        simulation.movementClassDefinitions = std::move(dataMaps.movementClassDefinitions);
+        simulation.movementClassDatabase = std::move(dataMaps.movementClassDatabase);
+        simulation.movementClassCollisionService = std::move(movementClassCollisionService);
         simulation.unitModelDefinitions = dataMaps.modelDefinitions;
         simulation.unitScriptDefinitions = loadCobScripts(*sceneContext.vfs);
         simulation.featureDefinitions = std::move(dataMaps.featureDefinitions);
@@ -283,14 +264,13 @@ namespace rwe
         auto gameScene = std::make_unique<GameScene>(
             sceneContext,
             std::move(playerCommandService),
-            std::move(meshDatabase),
+            std::move(dataMaps.gameMediaDatabase),
             worldCameraState,
             atlasInfo.textureAtlas,
             std::move(atlasInfo.teamTextureAtlases),
             std::move(simulation),
             std::move(mapInfo.terrainGraphics),
-            std::move(unitDatabase),
-            std::move(meshService),
+            std::move(dataMaps.builderGuisDatabase),
             std::move(gameNetworkService),
             minimap,
             minimapDots,
@@ -346,17 +326,6 @@ namespace rwe
     }
 
 
-    std::vector<std::string> getFeatureNames(TntArchive& tnt)
-    {
-        std::vector<std::string> features;
-
-        tnt.readFeatures([&](const auto& featureName) {
-            features.push_back(featureName);
-        });
-
-        return features;
-    }
-
     LoadingScene::LoadMapResult LoadingScene::loadMap(const std::string& mapName, const OtaRecord& ota, unsigned int schemaIndex)
     {
         auto tntBytes = sceneContext.vfs->readFile("maps/" + mapName + ".tnt");
@@ -365,7 +334,7 @@ namespace rwe
             throw std::runtime_error("Failed to load map bytes");
         }
 
-        boost::interprocess::bufferstream tntStream(tntBytes->data(), tntBytes->size());
+        rwe::SpanStream tntStream(tntBytes->data(), tntBytes->size());
         TntArchive tnt(&tntStream);
 
         auto tileTextures = getTileTextures(tnt);
@@ -408,7 +377,7 @@ namespace rwe
             features.emplace_back(Point(f.xPos, f.zPos), f.featureName);
         }
 
-        return LoadMapResult{std::move(terrain), static_cast<unsigned char>(schema.surfaceMetal), std::move(features), std::move(terrainGraphics)};
+        return LoadMapResult{std::move(terrain), static_cast<unsigned char>(schema.surfaceMetal), ota.minWindSpeed, ota.maxWindSpeed, std::move(features), std::move(terrainGraphics)};
     }
 
     std::vector<TextureArrayRegion> LoadingScene::getTileTextures(TntArchive& tnt)
@@ -456,44 +425,6 @@ namespace rwe
         return tileTextures;
     }
 
-    Grid<std::size_t> LoadingScene::getMapData(TntArchive& tnt)
-    {
-        auto mapWidthInTiles = tnt.getHeader().width / 2;
-        auto mapHeightInTiles = tnt.getHeader().height / 2;
-        std::vector<uint16_t> mapData(mapWidthInTiles * mapHeightInTiles);
-        tnt.readMapData(mapData.data());
-        std::vector<std::size_t> dataCopy;
-        dataCopy.reserve(mapData.size());
-        std::copy(mapData.begin(), mapData.end(), std::back_inserter(dataCopy));
-        Grid<std::size_t> dataGrid(mapWidthInTiles, mapHeightInTiles, std::move(dataCopy));
-        return dataGrid;
-    }
-
-    std::vector<FeatureTdf> LoadingScene::getFeatures(const std::unordered_map<std::string, FeatureTdf>& featuresMap, TntArchive& tnt)
-    {
-        std::vector<FeatureTdf> features;
-
-        tnt.readFeatures([&](const auto& featureName) {
-            const auto& feature = featuresMap.at(featureName);
-            features.push_back(feature);
-        });
-
-        return features;
-    }
-
-    Grid<unsigned char> LoadingScene::getHeightGrid(const Grid<TntTileAttributes>& attrs) const
-    {
-        const auto& sourceData = attrs.getVector();
-
-        std::vector<unsigned char> data;
-        data.reserve(sourceData.size());
-
-        std::transform(sourceData.begin(), sourceData.end(), std::back_inserter(data), [](const TntTileAttributes& e) {
-            return e.height;
-        });
-
-        return Grid<unsigned char>(attrs.getWidth(), attrs.getHeight(), std::move(data));
-    }
 
     const SideData& LoadingScene::getSideData(const std::string& side) const
     {
@@ -506,432 +437,8 @@ namespace rwe
         return it->second;
     }
 
-    Vector3f colorToVector(const Color& color)
-    {
-        return Vector3f(
-            static_cast<float>(color.r) / 255.0f,
-            static_cast<float>(color.g) / 255.0f,
-            static_cast<float>(color.b) / 255.0f);
-    }
 
-    unsigned int colorDistance(const Color& a, const Color& b)
-    {
-        auto dr = a.r > b.r ? a.r - b.r : b.r - a.r;
-        auto dg = a.g > b.g ? a.g - b.g : b.g - a.g;
-        auto db = a.b > b.b ? a.b - b.b : b.b - a.b;
-        return dr + dg + db;
-    }
-
-    Vector3f getLaserColorUtil(const std::vector<Color>& palette, const std::vector<Color>& guiPalette, unsigned int colorIndex)
-    {
-        // In TA, lasers use the GUIPAL colors,
-        // but these must be mapped to a color available
-        // in the in-game PALETTE.
-        const auto& guiColor = guiPalette.at(colorIndex);
-
-        auto elem = std::min_element(
-            palette.begin(),
-            palette.end(),
-            [&guiColor](const auto& a, const auto& b) { return colorDistance(guiColor, a) < colorDistance(guiColor, b); });
-
-        return colorToVector(*elem);
-    }
-
-    std::optional<std::string> getFxName(unsigned int code)
-    {
-        switch (code)
-        {
-            case 0:
-                return "cannonshell";
-            case 1:
-                return "plasmasm";
-            case 2:
-                return "plasmamd";
-            case 3:
-                return "ultrashell";
-            case 4:
-                return "plasmasm";
-            default:
-                return std::nullopt;
-        }
-    }
-
-    std::vector<std::string> splitCategories(const std::string& s)
-    {
-        std::vector<std::string> result;
-        std::istringstream stream(s);
-        std::string token;
-        while (stream >> token)
-        {
-            std::transform(token.begin(), token.end(), token.begin(), ::toupper);
-            result.push_back(token);
-        }
-        return result;
-    }
-
-    WeaponDefinition parseWeaponDefinition(const WeaponTdf& tdf)
-    {
-        WeaponDefinition weaponDefinition;
-
-        weaponDefinition.maxRange = SimScalar(tdf.range);
-        weaponDefinition.reloadTime = SimScalar(tdf.reloadTime);
-        weaponDefinition.tolerance = SimAngle(tdf.tolerance);
-        weaponDefinition.pitchTolerance = SimAngle(tdf.pitchTolerance);
-        weaponDefinition.velocity = SimScalar(static_cast<float>(tdf.weaponVelocity) / 30.0f);
-
-        weaponDefinition.burst = tdf.burst;
-        weaponDefinition.burstInterval = SimScalar(tdf.burstRate);
-        weaponDefinition.sprayAngle = SimAngle(tdf.sprayAngle);
-
-        if (tdf.dropped)
-        {
-            weaponDefinition.physicsType = ProjectilePhysicsTypeDropped();
-        }
-        else if (tdf.guidance || tdf.cruise || tdf.vLaunch)
-        {
-            weaponDefinition.physicsType = ProjectilePhysicsTypeGuided{
-                SimScalar(tdf.turnRate),
-                SimScalar(static_cast<float>(tdf.weaponAcceleration) / (30.0f * 30.0f))};
-        }
-        else if (tdf.tracks)
-        {
-            weaponDefinition.physicsType = ProjectilePhysicsTypeTracking{SimScalar(tdf.turnRate)};
-        }
-        else if (tdf.lineOfSight)
-        {
-            weaponDefinition.physicsType = ProjectilePhysicsTypeLineOfSight();
-        }
-        else if (tdf.ballistic)
-        {
-            weaponDefinition.physicsType = ProjectilePhysicsTypeBallistic();
-        }
-
-        weaponDefinition.commandFire = tdf.commandFire;
-
-        for (const auto& p : tdf.damage)
-        {
-            weaponDefinition.damage.insert_or_assign(toUpper(p.first), p.second);
-        }
-
-        weaponDefinition.damageRadius = SimScalar(static_cast<float>(tdf.areaOfEffect) / 2.0f);
-
-        if (tdf.weaponTimer != 0.0f)
-        {
-            weaponDefinition.weaponTimer = GameTime(static_cast<unsigned int>(tdf.weaponTimer * 30.0f));
-        }
-
-        weaponDefinition.groundBounce = tdf.groundBounce;
-
-        weaponDefinition.randomDecay = GameTime(static_cast<unsigned int>(tdf.randomDecay * 30.0f));
-
-        weaponDefinition.toAirWeapon = tdf.toAirWeapon;
-        weaponDefinition.onlyTargetCategory = splitCategories(tdf.onlyTargetCategory);
-        weaponDefinition.noChaseCategory = splitCategories(tdf.noChaseCategory);
-
-        return weaponDefinition;
-    }
-
-    std::optional<YardMapCell> parseYardMapCell(char c)
-    {
-        switch (c)
-        {
-            case 'c':
-                return YardMapCell::GroundGeoPassableWhenOpen;
-            case 'C':
-                return YardMapCell::WaterPassableWhenOpen;
-            case 'f':
-                return YardMapCell::GroundNoFeature;
-            case 'g':
-                return YardMapCell::GroundGeoPassableWhenOpen;
-            case 'G':
-                return YardMapCell::Geo;
-            case 'o':
-                return YardMapCell::Ground;
-            case 'O':
-                return YardMapCell::GroundPassableWhenClosed;
-            case 'w':
-                return YardMapCell::Water;
-            case 'y':
-                return YardMapCell::GroundPassable;
-            case 'Y':
-                return YardMapCell::WaterPassable;
-            case '.':
-                return YardMapCell::Passable;
-            case ' ':
-                return std::nullopt;
-            case '\r':
-                return std::nullopt;
-            case '\n':
-                return std::nullopt;
-            case '\t':
-                return std::nullopt;
-            default:
-                return YardMapCell::Ground;
-        }
-    }
-
-    std::vector<YardMapCell> parseYardMapCells(const std::string& yardMap)
-    {
-        std::vector<YardMapCell> cells;
-        for (const auto& c : yardMap)
-        {
-            auto cell = parseYardMapCell(c);
-            if (cell)
-            {
-                cells.push_back(*cell);
-            }
-        }
-        return cells;
-    }
-
-    Grid<YardMapCell> parseYardMap(unsigned int width, unsigned int height, const std::string& yardMap)
-    {
-        auto cells = parseYardMapCells(yardMap);
-        cells.resize(width * height, YardMapCell::Ground);
-        return Grid<YardMapCell>(width, height, std::move(cells));
-    }
-
-    UnitDefinition parseUnitDefinition(const UnitFbi& fbi, MovementClassCollisionService& collisionService)
-    {
-        UnitDefinition u;
-
-        u.unitName = fbi.name;
-        u.objectName = fbi.objectName;
-
-        u.turnRate = toWorldAnglePerTick(fbi.turnRate);
-        u.maxVelocity = SimScalar(fbi.maxVelocity.value);
-        u.acceleration = SimScalar(fbi.acceleration.value);
-        u.brakeRate = SimScalar(fbi.brakeRate.value);
-
-        u.canAttack = fbi.canAttack;
-        u.canMove = fbi.canMove;
-        u.canGuard = fbi.canGuard;
-
-        u.commander = fbi.commander;
-
-        u.maxHitPoints = fbi.maxDamage;
-
-        u.isMobile = fbi.bmCode;
-
-        u.floater = fbi.floater;
-        u.canHover = fbi.canHover;
-
-        u.canFly = fbi.canFly;
-
-        u.cruiseAltitude = SimScalar(fbi.cruiseAlt);
-
-        u.weapon1 = fbi.weapon1;
-        u.weapon2 = fbi.weapon2;
-        u.weapon3 = fbi.weapon3;
-
-        u.explodeAs = fbi.explodeAs;
-
-        u.builder = fbi.builder;
-        u.buildTime = fbi.buildTime;
-        u.buildCostEnergy = fbi.buildCostEnergy;
-        u.buildCostMetal = fbi.buildCostMetal;
-
-        u.workerTimePerTick = fbi.workerTime / 30;
-
-        u.buildDistance = SimScalar(fbi.buildDistance);
-
-        u.onOffable = fbi.onOffable;
-        u.activateWhenBuilt = fbi.activateWhenBuilt;
-
-        u.energyMake = fbi.energyMake;
-        u.metalMake = fbi.metalMake;
-        u.energyUse = fbi.energyUse;
-        u.metalUse = fbi.metalUse;
-
-        u.makesMetal = fbi.makesMetal;
-        u.extractsMetal = fbi.extractsMetal;
-
-        u.energyStorage = fbi.energyStorage;
-        u.metalStorage = fbi.metalStorage;
-
-        u.corpse = fbi.corpse;
-
-        u.hideDamage = fbi.hideDamage;
-        u.showPlayerName = fbi.showPlayerName;
-
-        u.soundCategory = fbi.soundCategory;
-
-        u.categories = splitCategories(fbi.category);
-
-        auto movementClassId = collisionService.resolveMovementClass(fbi.movementClass);
-
-        if (movementClassId)
-        {
-            u.movementCollisionInfo = UnitDefinition::NamedMovementClass{*movementClassId};
-        }
-        else
-        {
-            u.movementCollisionInfo = UnitDefinition::AdHocMovementClass{
-                fbi.footprintX,
-                fbi.footprintZ,
-                fbi.maxSlope,
-                fbi.maxWaterSlope,
-                fbi.minWaterDepth,
-                fbi.maxWaterDepth,
-            };
-
-            u.yardMap = parseYardMap(fbi.footprintX, fbi.footprintZ, fbi.yardMap);
-            if (u.yardMap->any(isWater))
-            {
-                u.floater = true;
-            }
-        }
-
-        return u;
-    }
-
-    WeaponMediaInfo parseWeaponMediaInfo(const std::vector<Color>& palette, const std::vector<Color>& guiPalette, const WeaponTdf& tdf)
-    {
-        WeaponMediaInfo mediaInfo;
-
-        mediaInfo.soundTrigger = tdf.soundTrigger;
-
-        if (!tdf.soundStart.empty())
-        {
-            mediaInfo.soundStart = tdf.soundStart;
-        }
-        if (!tdf.soundHit.empty())
-        {
-            mediaInfo.soundHit = tdf.soundHit;
-        }
-        if (!tdf.soundWater.empty())
-        {
-            mediaInfo.soundWater = tdf.soundWater;
-        }
-
-        mediaInfo.startSmoke = tdf.startSmoke;
-        mediaInfo.endSmoke = tdf.endSmoke;
-        if (tdf.smokeTrail)
-        {
-            mediaInfo.smokeTrail = GameTime(static_cast<unsigned int>(tdf.smokeDelay * 30.0f));
-        }
-
-        switch (tdf.renderType)
-        {
-            case 0:
-            {
-                mediaInfo.renderType = ProjectileRenderTypeLaser{
-                    getLaserColorUtil(palette, guiPalette, tdf.color),
-                    getLaserColorUtil(palette, guiPalette, tdf.color2),
-                    SimScalar(tdf.duration * 30.0f * 2.0f), // duration seems to match better if doubled
-                };
-                break;
-            }
-            case 1:
-            {
-                if (tdf.model.empty())
-                {
-                    mediaInfo.renderType = ProjectileRenderTypeNone{};
-                }
-                else
-                {
-                    mediaInfo.renderType = ProjectileRenderTypeModel{
-                        toUpper(tdf.model), ProjectileRenderTypeModel::RotationMode::HalfZ};
-                }
-                break;
-            }
-            case 3:
-            {
-                if (tdf.model.empty())
-                {
-                    mediaInfo.renderType = ProjectileRenderTypeNone{};
-                }
-                else
-                {
-                    mediaInfo.renderType = ProjectileRenderTypeModel{
-                        toUpper(tdf.model), ProjectileRenderTypeModel::RotationMode::QuarterY};
-                }
-                break;
-            }
-            case 4:
-            {
-                auto fxName = getFxName(tdf.color);
-                if (fxName)
-                {
-
-                    mediaInfo.renderType = ProjectileRenderTypeSprite{"fx", *fxName};
-                }
-                else
-                {
-                    mediaInfo.renderType = ProjectileRenderTypeNone{};
-                }
-
-                break;
-            }
-            case 5:
-            {
-                mediaInfo.renderType = ProjectileRenderTypeFlamethrower{};
-                break;
-            }
-            case 6:
-            {
-                if (tdf.model.empty())
-                {
-                    mediaInfo.renderType = ProjectileRenderTypeNone{};
-                }
-                else
-                {
-                    mediaInfo.renderType = ProjectileRenderTypeModel{
-                        toUpper(tdf.model), ProjectileRenderTypeModel::RotationMode::None};
-                }
-                break;
-            }
-            case 7:
-            {
-                mediaInfo.renderType = ProjectileRenderTypeLightning{
-                    getLaserColorUtil(palette, guiPalette, tdf.color),
-                    SimScalar(tdf.duration * 30.0f * 2.0f), // duration seems to match better if doubled
-                };
-                break;
-            }
-            default:
-            {
-                mediaInfo.renderType = ProjectileRenderTypeLaser{
-                    Vector3f(0.0f, 0.0f, 0.0f),
-                    Vector3f(0.0f, 0.0f, 0.0f),
-                    SimScalar(4.0f)};
-                break;
-            }
-        }
-
-        if (!tdf.explosionGaf.empty() && !tdf.explosionArt.empty())
-        {
-            mediaInfo.explosionAnim = AnimLocation{tdf.explosionGaf, tdf.explosionArt};
-        }
-
-        if (!tdf.waterExplosionGaf.empty() && !tdf.waterExplosionArt.empty())
-        {
-            mediaInfo.waterExplosionAnim = AnimLocation{tdf.waterExplosionGaf, tdf.waterExplosionArt};
-        }
-
-        return mediaInfo;
-    }
-
-    FeatureDefinitionId getFeatureId(FeatureDefinitionId& nextId, const std::unordered_map<std::string, FeatureDefinitionId>& featureNameIndex, std::deque<std::string>& openQueue, std::unordered_map<std::string, FeatureDefinitionId>& openSet, const std::string& featureName)
-    {
-        if (auto existingId = featureNameIndex.find(featureName); existingId != featureNameIndex.end())
-        {
-            return existingId->second;
-        }
-
-        if (auto it = openSet.find(toUpper(featureName)); it != openSet.end())
-        {
-            return it->second;
-        }
-
-        auto id = nextId;
-        openQueue.push_back(featureName);
-        openSet.insert({toUpper(featureName), nextId});
-        nextId = FeatureDefinitionId(nextId.value + 1);
-        return id;
-    }
-
-    void LoadingScene::loadFeatureMedia(MeshService& meshService, std::unordered_map<std::string, UnitModelDefinition>& modelDefinitions, MeshDatabase& meshDatabase, const FeatureTdf& tdf)
+    void LoadingScene::loadFeatureMedia(MeshService& meshService, std::unordered_map<std::string, UnitModelDefinition>& modelDefinitions, GameMediaDatabase& gameMediaDatabase, const FeatureTdf& tdf)
     {
         FeatureMediaInfo f;
 
@@ -949,7 +456,7 @@ namespace rwe
                 modelDefinitions.insert({normalizedObjectName, std::move(meshInfo.modelDefinition)});
                 for (const auto& m : meshInfo.pieceMeshes)
                 {
-                    meshDatabase.addUnitPieceMesh(normalizedObjectName, m.first, m.second);
+                    gameMediaDatabase.addUnitPieceMesh(normalizedObjectName, m.first, m.second);
                 }
             }
             f.renderInfo = FeatureObjectInfo{normalizedObjectName};
@@ -984,10 +491,10 @@ namespace rwe
 
         f.seqNameDie = tdf.seqNameDie;
 
-        meshDatabase.addFeature(std::move(f));
+        gameMediaDatabase.addFeature(std::move(f));
     }
 
-    void LoadingScene::loadFeature(MeshService& meshService, MeshDatabase& meshDatabase, const std::unordered_map<std::string, FeatureTdf>& tdfs, DataMaps& dataMaps, const std::string& initialFeatureName)
+    void LoadingScene::loadFeature(MeshService& meshService, GameMediaDatabase& gameMediaDatabase, const std::unordered_map<std::string, FeatureTdf>& tdfs, DataMaps& dataMaps, const std::string& initialFeatureName)
     {
         auto nextId = dataMaps.featureDefinitions.getNextId();
         std::unordered_map<std::string, FeatureDefinitionId> openSet{{toUpper(initialFeatureName), nextId}};
@@ -1049,16 +556,13 @@ namespace rwe
             auto id = dataMaps.featureDefinitions.insert(f);
             dataMaps.featureNameIndex.insert({toUpper(featureName), id});
 
-            loadFeatureMedia(meshService, dataMaps.modelDefinitions, meshDatabase, tdf);
+            loadFeatureMedia(meshService, dataMaps.modelDefinitions, gameMediaDatabase, tdf);
         }
     }
 
-    std::tuple<UnitDatabase, MeshDatabase, LoadingScene::DataMaps, MovementClassCollisionService> LoadingScene::createUnitDatabase(const MapTerrain& terrain, MeshService& meshService, const std::unordered_set<std::string>& requiredFeatures)
+    LoadingScene::DataMaps LoadingScene::loadDefinitions(MeshService& meshService, const std::unordered_set<std::string>& requiredFeatures)
     {
-        UnitDatabase db;
-        MeshDatabase meshDb;
         DataMaps dataMaps;
-        MovementClassCollisionService movementClassCollisionService;
 
         // read sound categories
         {
@@ -1074,28 +578,28 @@ namespace rwe
             for (auto& s : sounds)
             {
                 const auto& c = s.second;
-                preloadSound(meshDb, c.select1);
-                preloadSound(meshDb, c.unitComplete);
-                preloadSound(meshDb, c.activate);
-                preloadSound(meshDb, c.deactivate);
-                preloadSound(meshDb, c.ok1);
-                preloadSound(meshDb, c.arrived1);
-                preloadSound(meshDb, c.cant1);
-                preloadSound(meshDb, c.underAttack);
-                preloadSound(meshDb, c.build);
-                preloadSound(meshDb, c.repair);
-                preloadSound(meshDb, c.working);
-                preloadSound(meshDb, c.cloak);
-                preloadSound(meshDb, c.uncloak);
-                preloadSound(meshDb, c.capture);
-                preloadSound(meshDb, c.count5);
-                preloadSound(meshDb, c.count4);
-                preloadSound(meshDb, c.count3);
-                preloadSound(meshDb, c.count2);
-                preloadSound(meshDb, c.count1);
-                preloadSound(meshDb, c.count0);
-                preloadSound(meshDb, c.cancelDestruct);
-                meshDb.addSoundClass(s.first, std::move(s.second));
+                preloadSound(dataMaps.gameMediaDatabase, c.select1);
+                preloadSound(dataMaps.gameMediaDatabase, c.unitComplete);
+                preloadSound(dataMaps.gameMediaDatabase, c.activate);
+                preloadSound(dataMaps.gameMediaDatabase, c.deactivate);
+                preloadSound(dataMaps.gameMediaDatabase, c.ok1);
+                preloadSound(dataMaps.gameMediaDatabase, c.arrived1);
+                preloadSound(dataMaps.gameMediaDatabase, c.cant1);
+                preloadSound(dataMaps.gameMediaDatabase, c.underAttack);
+                preloadSound(dataMaps.gameMediaDatabase, c.build);
+                preloadSound(dataMaps.gameMediaDatabase, c.repair);
+                preloadSound(dataMaps.gameMediaDatabase, c.working);
+                preloadSound(dataMaps.gameMediaDatabase, c.cloak);
+                preloadSound(dataMaps.gameMediaDatabase, c.uncloak);
+                preloadSound(dataMaps.gameMediaDatabase, c.capture);
+                preloadSound(dataMaps.gameMediaDatabase, c.count5);
+                preloadSound(dataMaps.gameMediaDatabase, c.count4);
+                preloadSound(dataMaps.gameMediaDatabase, c.count3);
+                preloadSound(dataMaps.gameMediaDatabase, c.count2);
+                preloadSound(dataMaps.gameMediaDatabase, c.count1);
+                preloadSound(dataMaps.gameMediaDatabase, c.count0);
+                preloadSound(dataMaps.gameMediaDatabase, c.cancelDestruct);
+                dataMaps.gameMediaDatabase.addSoundClass(s.first, std::move(s.second));
             }
         }
 
@@ -1109,12 +613,11 @@ namespace rwe
             }
 
             std::string movementString(bytes->data(), bytes->size());
-            auto classes = parseMovementTdf(parseTdfFromString(movementString));
+            auto classes = parseMoveInfoTdf(parseTdfFromString(movementString));
             for (auto& c : classes)
             {
-                auto name = c.second.name;
-                auto movementClassId = movementClassCollisionService.registerMovementClass(name, computeWalkableGrid(terrain, c.second));
-                dataMaps.movementClassDefinitions.insert({movementClassId, c.second});
+                auto movementClassDefinition = parseMovementClassDefinition(c.second);
+                dataMaps.movementClassDatabase.registerMovementClass(movementClassDefinition);
             }
         }
 
@@ -1138,9 +641,9 @@ namespace rwe
                     auto weaponDefinition = parseWeaponDefinition(pair.second);
                     auto weaponMediaInfo = parseWeaponMediaInfo(*sceneContext.palette, *sceneContext.guiPalette, pair.second);
 
-                    preloadSound(meshDb, weaponMediaInfo.soundStart);
-                    preloadSound(meshDb, weaponMediaInfo.soundHit);
-                    preloadSound(meshDb, weaponMediaInfo.soundWater);
+                    preloadSound(dataMaps.gameMediaDatabase, weaponMediaInfo.soundStart);
+                    preloadSound(dataMaps.gameMediaDatabase, weaponMediaInfo.soundHit);
+                    preloadSound(dataMaps.gameMediaDatabase, weaponMediaInfo.soundWater);
 
                     if (auto modelRenderType = std::get_if<ProjectileRenderTypeModel>(&weaponMediaInfo.renderType); modelRenderType != nullptr)
                     {
@@ -1148,22 +651,22 @@ namespace rwe
                         dataMaps.modelDefinitions.insert({modelRenderType->objectName, std::move(meshInfo.modelDefinition)});
                         for (const auto& m : meshInfo.pieceMeshes)
                         {
-                            meshDb.addUnitPieceMesh(modelRenderType->objectName, m.first, m.second);
+                            dataMaps.gameMediaDatabase.addUnitPieceMesh(modelRenderType->objectName, m.first, m.second);
                         }
                     }
 
                     if (weaponMediaInfo.explosionAnim)
                     {
                         auto anim = sceneContext.textureService->getGafEntry("anims/" + weaponMediaInfo.explosionAnim->gafName + ".gaf", weaponMediaInfo.explosionAnim->animName);
-                        meshDb.addSpriteSeries(weaponMediaInfo.explosionAnim->gafName, weaponMediaInfo.explosionAnim->animName, anim);
+                        dataMaps.gameMediaDatabase.addSpriteSeries(weaponMediaInfo.explosionAnim->gafName, weaponMediaInfo.explosionAnim->animName, anim);
                     }
                     if (weaponMediaInfo.waterExplosionAnim)
                     {
                         auto anim = sceneContext.textureService->getGafEntry("anims/" + weaponMediaInfo.waterExplosionAnim->gafName + ".gaf", weaponMediaInfo.waterExplosionAnim->animName);
-                        meshDb.addSpriteSeries(weaponMediaInfo.waterExplosionAnim->gafName, weaponMediaInfo.waterExplosionAnim->animName, anim);
+                        dataMaps.gameMediaDatabase.addSpriteSeries(weaponMediaInfo.waterExplosionAnim->gafName, weaponMediaInfo.waterExplosionAnim->animName, anim);
                     }
 
-                    meshDb.addWeapon(toUpper(pair.first), std::move(weaponMediaInfo));
+                    dataMaps.gameMediaDatabase.addWeapon(toUpper(pair.first), std::move(weaponMediaInfo));
 
                     dataMaps.weaponDefinitions.insert({toUpper(pair.first), std::move(weaponDefinition)});
                 }
@@ -1191,7 +694,7 @@ namespace rwe
                 std::string fbiString(bytes->data(), bytes->size());
                 auto fbi = parseUnitFbi(parseTdfFromString(fbiString));
 
-                auto unitDefinition = parseUnitDefinition(fbi, movementClassCollisionService);
+                auto unitDefinition = parseUnitDefinition(fbi, dataMaps.movementClassDatabase);
                 dataMaps.unitDefinitions.insert({toUpper(fbi.unitName), std::move(unitDefinition)});
 
                 // if it's a builder, also attempt to read its gui pages
@@ -1200,7 +703,7 @@ namespace rwe
                     auto guiPages = loadBuilderGui(fbi.unitName);
                     if (guiPages)
                     {
-                        db.addBuilderGui(fbi.unitName, std::move(*guiPages));
+                        dataMaps.builderGuisDatabase.addBuilderGui(fbi.unitName, std::move(*guiPages));
                     }
 
                     // TODO: if no gui defined, attempt to build it dynamically?
@@ -1211,11 +714,11 @@ namespace rwe
                 dataMaps.modelDefinitions.insert({toUpper(fbi.objectName), std::move(meshInfo.modelDefinition)});
                 for (const auto& m : meshInfo.pieceMeshes)
                 {
-                    meshDb.addUnitPieceMesh(fbi.objectName, m.first, m.second);
+                    dataMaps.gameMediaDatabase.addUnitPieceMesh(fbi.objectName, m.first, m.second);
                 }
 
-                meshDb.addSelectionCollisionMesh(fbi.objectName, std::make_shared<CollisionMesh>(std::move(meshInfo.selectionMesh.collisionMesh)));
-                meshDb.addSelectionMesh(fbi.objectName, std::make_shared<GlMesh>(std::move(meshInfo.selectionMesh.visualMesh)));
+                dataMaps.gameMediaDatabase.addSelectionCollisionMesh(fbi.objectName, std::make_shared<CollisionMesh>(std::move(meshInfo.selectionMesh.collisionMesh)));
+                dataMaps.gameMediaDatabase.addSelectionMesh(fbi.objectName, std::make_shared<GlMesh>(std::move(meshInfo.selectionMesh.visualMesh)));
 
                 if (!fbi.corpse.empty())
                 {
@@ -1251,44 +754,44 @@ namespace rwe
             // actually parse and load assets for features that we require
             for (const auto& featureName : requiredFeaturesSet)
             {
-                loadFeature(meshService, meshDb, featureTdfs, dataMaps, featureName);
+                loadFeature(meshService, dataMaps.gameMediaDatabase, featureTdfs, dataMaps, featureName);
             }
         }
 
         // preload smoke
         {
             auto anim = sceneContext.textureService->getGafEntry("anims/FX.GAF", "smoke 1");
-            meshDb.addSpriteSeries("FX", "smoke 1", anim);
+            dataMaps.gameMediaDatabase.addSpriteSeries("FX", "smoke 1", anim);
             auto anim2 = sceneContext.textureService->getGafEntry("anims/FX.GAF", "smoke 2");
-            meshDb.addSpriteSeries("FX", "smoke 2", anim2);
+            dataMaps.gameMediaDatabase.addSpriteSeries("FX", "smoke 2", anim2);
         }
 
         // preload weapon sprites
         {
             auto anim = sceneContext.textureService->getGafEntry("anims/FX.GAF", "cannonshell");
-            meshDb.addSpriteSeries("FX", "cannonshell", anim);
+            dataMaps.gameMediaDatabase.addSpriteSeries("FX", "cannonshell", anim);
         }
         {
             auto anim = sceneContext.textureService->getGafEntry("anims/FX.GAF", "plasmasm");
-            meshDb.addSpriteSeries("FX", "plasmasm", anim);
+            dataMaps.gameMediaDatabase.addSpriteSeries("FX", "plasmasm", anim);
         }
         {
             auto anim = sceneContext.textureService->getGafEntry("anims/FX.GAF", "plasmamd");
-            meshDb.addSpriteSeries("FX", "plasmamd", anim);
+            dataMaps.gameMediaDatabase.addSpriteSeries("FX", "plasmamd", anim);
         }
         {
             auto anim = sceneContext.textureService->getGafEntry("anims/FX.GAF", "ultrashell");
-            meshDb.addSpriteSeries("FX", "ultrashell", anim);
+            dataMaps.gameMediaDatabase.addSpriteSeries("FX", "ultrashell", anim);
         }
         {
             auto anim = sceneContext.textureService->getGafEntry("anims/FX.GAF", "flamestream");
-            meshDb.addSpriteSeries("FX", "flamestream", anim);
+            dataMaps.gameMediaDatabase.addSpriteSeries("FX", "flamestream", anim);
         }
 
-        return std::make_tuple(std::move(db), std::move(meshDb), std::move(dataMaps), std::move(movementClassCollisionService));
+        return dataMaps;
     }
 
-    void LoadingScene::preloadSound(MeshDatabase& meshDb, const std::optional<std::string>& soundName)
+    void LoadingScene::preloadSound(GameMediaDatabase& meshDb, const std::optional<std::string>& soundName)
     {
         if (!soundName)
         {
@@ -1298,7 +801,7 @@ namespace rwe
         preloadSound(meshDb, *soundName);
     }
 
-    void LoadingScene::preloadSound(MeshDatabase& meshDb, const std::string& soundName)
+    void LoadingScene::preloadSound(GameMediaDatabase& meshDb, const std::string& soundName)
     {
         auto sound = sceneContext.audioService->loadSound(soundName);
         if (!sound)

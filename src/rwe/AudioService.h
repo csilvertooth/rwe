@@ -7,13 +7,14 @@
 #include <rwe/sdl/SdlMixerContext.h>
 #include <rwe/vfs/AbstractVirtualFileSystem.h>
 #include <unordered_map>
+#include <vector>
 
 namespace rwe
 {
     class AudioService
     {
     public:
-        using Sound = Mix_Chunk;
+        using Sound = MIX_Audio;
         using SoundHandle = std::shared_ptr<Sound>;
 
         class LoopToken
@@ -40,7 +41,14 @@ namespace rwe
         AbstractVirtualFileSystem* fileSystem;
         std::unordered_map<std::string, std::shared_ptr<Sound>> soundBank;
         Subject<int> channelFinished;
-        std::function<void(int)> channelFinishedCallback = std::bind(&Subject<int>::next, &channelFinished, std::placeholders::_1);
+
+        // Track pool: maps channel indices to MIX_Track pointers.
+        // Tracks 0..reservedCount-1 are "reserved" (used by playSoundIfFree).
+        std::vector<SdlMixerContext::TrackPtr> tracks;
+        unsigned int reservedCount{0};
+
+        // Default gain applied to sounds on load (equivalent to old MIX_MAX_VOLUME/4)
+        static constexpr float defaultGain = 0.25f;
 
     public:
         AudioService(SdlContext* sdlContext, SdlMixerContext* sdlMixerContext, AbstractVirtualFileSystem* fileSystem);
@@ -48,6 +56,8 @@ namespace rwe
         AudioService(const AudioService&&) = delete;
         AudioService& operator=(const AudioService&) = delete;
         AudioService& operator=(AudioService&&) = delete;
+
+        void allocateTracks(unsigned int count);
 
         LoopToken loopSound(const SoundHandle& sound);
 
@@ -65,5 +75,7 @@ namespace rwe
 
     private:
         void haltChannel(int channel);
+        int findFreeTrack();
+        void setupTrackCallback(int trackIndex);
     };
 }

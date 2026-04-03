@@ -1,9 +1,10 @@
-#include <SDL.h>
-#include <boost/filesystem.hpp>
-#include <boost/interprocess/streams/bufferstream.hpp>
+#include <SDL3/SDL.h>
+#include <algorithm>
+#include <rwe/util/SpanStream.h>
+#include <filesystem>
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include <png++/png.hpp>
+#include <rwe/util/png_write.h>
 #include <rwe/fixed_point.h>
 #include <rwe/io/_3do/_3do.h>
 #include <rwe/io/ota/ota.h>
@@ -15,7 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 using json = nlohmann::json;
 
@@ -113,18 +114,7 @@ void writeGetModeListSuccess(const std::vector<std::pair<int, int>>& modes)
 
 namespace rwe
 {
-    void loadPalette(std::istream& in, png::rgb_pixel* buffer)
-    {
-        for (unsigned int i = 0; i < 256; ++i)
-        {
-            in.read(reinterpret_cast<char*>(&(buffer[i].red)), 1);
-            in.read(reinterpret_cast<char*>(&(buffer[i].green)), 1);
-            in.read(reinterpret_cast<char*>(&(buffer[i].blue)), 1);
-            in.seekg(1, std::ios::cur); // skip alpha
-        }
-    }
-
-    void extractMinimap(CompositeVirtualFileSystem& vfs, const png::rgb_pixel* palette, const std::string& source, const std::string& mapName, const std::string& outputPath)
+    void extractMinimap(CompositeVirtualFileSystem& vfs, const RgbPixel* palette, const std::string& source, const std::string& mapName, const std::string& outputPath)
     {
 
         auto tntData = vfs.readFileFromSource(source, "maps/" + mapName + ".tnt");
@@ -133,19 +123,18 @@ namespace rwe
             throw std::runtime_error("map tnt not found!");
         }
 
-        boost::interprocess::bufferstream tntStream(tntData->data(), tntData->size());
+        rwe::SpanStream tntStream(tntData->data(), tntData->size());
         TntArchive tnt(&tntStream);
         auto minimap = tnt.readMinimap();
 
-        png::image<png::rgb_pixel> image(minimap.width, minimap.height);
-        for (png::uint_32 y = 0; y < image.get_height(); ++y)
+        PngImage image(minimap.width, minimap.height);
+        for (uint32_t y = 0; y < minimap.height; ++y)
         {
-            for (png::uint_32 x = 0; x < image.get_width(); ++x)
+            for (uint32_t x = 0; x < minimap.width; ++x)
             {
                 auto b = static_cast<unsigned char>(minimap.data[(y * minimap.width) + x]);
                 assert(b >= 0 && b < 256);
-                auto px = palette[b];
-                image[y][x] = px;
+                image.at(x, y) = palette[b];
             }
         }
 
@@ -172,8 +161,8 @@ std::optional<std::string> getMinimap(rwe::CompositeVirtualFileSystem& vfs, cons
         return std::nullopt;
     }
 
-    boost::interprocess::bufferstream paletteBuffer(paletteBytes->data(), paletteBytes->size());
-    png::rgb_pixel palette[256];
+    rwe::SpanStream paletteBuffer(paletteBytes->data(), paletteBytes->size());
+    rwe::RgbPixel palette[256];
     rwe::loadPalette(paletteBuffer, palette);
 
     auto output = fs::temp_directory_path();
@@ -185,24 +174,26 @@ std::optional<std::string> getMinimap(rwe::CompositeVirtualFileSystem& vfs, cons
 
 std::optional<std::vector<std::pair<int, int>>> getVideoModes()
 {
-    if (SDL_Init(SDL_INIT_VIDEO))
+    if (!SDL_Init(SDL_INIT_VIDEO))
     {
         return std::nullopt;
     }
     std::vector<std::pair<int, int>> modeList;
-    auto displayModes = SDL_GetNumDisplayModes(0);
-    for (int i = 0; i < displayModes; ++i)
+    auto primaryDisplay = SDL_GetPrimaryDisplay();
+    int count = 0;
+    auto** modes = SDL_GetFullscreenDisplayModes(primaryDisplay, &count);
+    if (modes)
     {
-        SDL_DisplayMode mode;
-        if (SDL_GetDisplayMode(0, i, &mode) != 0)
+        for (int i = 0; i < count; ++i)
         {
-            continue;
+            const auto* mode = modes[i];
+            if (mode->format != SDL_PIXELFORMAT_XRGB8888 || mode->refresh_rate != 60.0f)
+            {
+                continue;
+            }
+            modeList.emplace_back(mode->w, mode->h);
         }
-        if (mode.format != SDL_PIXELFORMAT_RGB888 || mode.refresh_rate != 60)
-        {
-            continue;
-        }
-        modeList.emplace_back(mode.w, mode.h);
+        SDL_free(modes);
     }
     SDL_Quit();
     return modeList;

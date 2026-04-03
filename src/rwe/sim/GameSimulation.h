@@ -4,7 +4,6 @@
 #include <rwe/cob/CobUnitId.h>
 #include <rwe/collections/SimpleVectorMap.h>
 #include <rwe/collections/VectorMap.h>
-#include <rwe/game/MovementClassCollisionService.h>
 #include <rwe/game/PlayerColorIndex.h>
 #include <rwe/geometry/BoundingBox3x.h>
 #include <rwe/pathfinding/PathFindingService.h>
@@ -14,6 +13,8 @@
 #include <rwe/sim/GameTime.h>
 #include <rwe/sim/MapFeature.h>
 #include <rwe/sim/MapTerrain.h>
+#include <rwe/sim/MovementClassCollisionService.h>
+#include <rwe/sim/MovementClassDatabase.h>
 #include <rwe/sim/MovementClassId.h>
 #include <rwe/sim/OccupiedGrid.h>
 #include <rwe/sim/PlayerId.h>
@@ -29,6 +30,8 @@
 
 namespace rwe
 {
+    constexpr int MaxUtilizableWindSpeed = 5000;
+
     enum class GamePlayerStatus
     {
         Alive,
@@ -262,7 +265,7 @@ namespace rwe
 
         std::unordered_map<std::string, WeaponDefinition> weaponDefinitions;
 
-        std::unordered_map<MovementClassId, MovementClass> movementClassDefinitions;
+        MovementClassDatabase movementClassDatabase;
         MovementClassCollisionService movementClassCollisionService;
 
         PathFindingService pathFindingService;
@@ -271,6 +274,8 @@ namespace rwe
         std::set<UnitId> flyingUnitsSet;
 
         Grid<unsigned char> metalGrid;
+
+        Grid<bool> geoGrid;
 
         std::vector<GamePlayerInfo> players;
 
@@ -288,11 +293,19 @@ namespace rwe
 
         std::vector<GameEvent> events;
 
-        explicit GameSimulation(MapTerrain&& terrain, MovementClassCollisionService&& movementClassCollisionService, unsigned char surfaceMetal);
+        SimScalar currentWindGenerationFactor{0_ss};
 
-        FeatureId addFeature(MapFeature&& newFeature);
+        const int minWindSpeed;
 
-        FeatureId addFeature(FeatureDefinitionId featureType, int heightmapX, int heightmapZ);
+        const int maxWindSpeed;
+
+        GameTime nextWindSpeedChange;
+
+        explicit GameSimulation(MapTerrain&& terrain, unsigned char surfaceMetal, int minWindSpeed, int maxWindSpeed);
+
+        std::optional<FeatureId> addFeature(MapFeature&& newFeature);
+
+        std::optional<FeatureId> addFeature(FeatureDefinitionId featureType, int heightmapX, int heightmapZ);
 
         PlayerId addPlayer(const GamePlayerInfo& info);
 
@@ -307,13 +320,17 @@ namespace rwe
         /**
          * Returns true if a unit with the given movementclass attributes
          * could be built at given location on the map -- i.e. it is valid terrain
-         * for the unit and it is not occupied by something else.
+         * for the unit, it is not occupied by something else, and it contains geo if required.
          */
-        bool canBeBuiltAt(const MovementClass& mc, unsigned int x, unsigned int y) const;
+        bool canBeBuiltAt(const MovementClassDefinition& mc, const std::optional<Grid<YardMapCell>>& yardMap, bool yardMapContainsGeo, unsigned int x, unsigned int y) const;
 
         DiscreteRect computeFootprintRegion(const SimVector& position, unsigned int footprintX, unsigned int footprintZ) const;
 
         DiscreteRect computeFootprintRegion(const SimVector& position, const UnitDefinition::MovementCollisionInfo& collisionInfo) const;
+
+        bool anyFeatureOccupies(const DiscreteRect& rect) const;
+
+        bool containsAnyGeoMatch(const Grid<YardMapCell>& yardMap, unsigned int x, unsigned int y) const;
 
         bool isCollisionAt(const DiscreteRect& rect) const;
 
@@ -321,7 +338,7 @@ namespace rwe
 
         bool isCollisionAt(const DiscreteRect& rect, UnitId self) const;
 
-        bool isYardmapBlocked(unsigned int x, unsigned int y, const Grid<YardMapCell>& yardMap, bool open) const;
+        bool isYardmapBlocked(unsigned int x, unsigned int y, const Grid<YardMapCell>& yardMap, bool open, UnitId self) const;
 
         bool isAdjacentToObstacle(const DiscreteRect& rect) const;
 
@@ -352,6 +369,10 @@ namespace rwe
         MapFeature& getFeature(FeatureId id);
 
         const MapFeature& getFeature(FeatureId id) const;
+
+        std::optional<std::reference_wrapper<MapFeature>> tryGetFeature(FeatureId id);
+
+        std::optional<std::reference_wrapper<const MapFeature>> tryGetFeature(FeatureId id) const;
 
         GamePlayerInfo& getPlayer(PlayerId player);
 
@@ -416,7 +437,7 @@ namespace rwe
 
         void setBuggerOff(UnitId unitId, bool value);
 
-        MovementClass getAdHocMovementClass(const UnitDefinition::MovementCollisionInfo& info) const;
+        MovementClassDefinition getAdHocMovementClass(const UnitDefinition::MovementCollisionInfo& info) const;
 
         std::pair<unsigned int, unsigned int> getFootprintXZ(const UnitDefinition::MovementCollisionInfo& info) const;
 
@@ -435,6 +456,8 @@ namespace rwe
         void killPlayer(PlayerId playerId);
 
         void processVictoryCondition();
+
+        void updateWind();
 
         void updateResources();
 

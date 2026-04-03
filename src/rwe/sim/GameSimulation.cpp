@@ -1,4 +1,5 @@
 #include "GameSimulation.h"
+#include <algorithm>
 #include <rwe/sim/GameHash_util.h>
 #include <rwe/sim/SimScalar.h>
 #include <rwe/sim/SimTicksPerSecond.h>
@@ -9,6 +10,7 @@
 #include <rwe/util/Index.h>
 #include <rwe/util/collection_util.h>
 #include <rwe/util/match.h>
+#include <rwe/util/rwe_string.h>
 #include <type_traits>
 #include <unordered_set>
 
@@ -82,31 +84,44 @@ namespace rwe
         return !(rhs == *this);
     }
 
-    GameSimulation::GameSimulation(MapTerrain&& terrain, MovementClassCollisionService&& movementClassCollisionService, unsigned char surfaceMetal)
+    GameSimulation::GameSimulation(MapTerrain&& terrain, unsigned char surfaceMetal, int minWindSpeed, int maxWindSpeed)
         : terrain(std::move(terrain)),
-          movementClassCollisionService(std::move(movementClassCollisionService)),
           occupiedGrid(this->terrain.getHeightMap().getWidth() - 1, this->terrain.getHeightMap().getHeight() - 1, OccupiedCell()),
-          metalGrid(this->terrain.getHeightMap().getWidth() - 1, this->terrain.getHeightMap().getHeight() - 1, surfaceMetal)
+          metalGrid(this->terrain.getHeightMap().getWidth() - 1, this->terrain.getHeightMap().getHeight() - 1, surfaceMetal),
+          geoGrid(this->terrain.getHeightMap().getWidth() - 1, this->terrain.getHeightMap().getHeight() - 1, false),
+          minWindSpeed(minWindSpeed),
+          maxWindSpeed(maxWindSpeed),
+          nextWindSpeedChange(gameTime)
     {
     }
 
-    FeatureId GameSimulation::addFeature(MapFeature&& newFeature)
+    std::optional<FeatureId> GameSimulation::addFeature(MapFeature&& newFeature)
     {
+        const auto& featureDefinition = getFeatureDefinition(newFeature.featureName);
+
+        auto footprintRegion = computeFootprintRegion(newFeature.position, featureDefinition.footprintX, featureDefinition.footprintZ);
+
+        if (anyFeatureOccupies(footprintRegion))
+        {
+            return std::nullopt;
+        }
+
         auto featureId = FeatureId(features.emplace(std::move(newFeature)));
 
         auto& f = features.tryGet(featureId)->get();
-        const auto& featureDefinition = getFeatureDefinition(f.featureName);
 
-        if (featureDefinition.blocking)
-        {
-            auto footprintRegion = computeFootprintRegion(f.position, featureDefinition.footprintX, featureDefinition.footprintZ);
-            occupiedGrid.forEach(occupiedGrid.clipRegion(footprintRegion), [featureId](auto& cell) { cell.occupiedType = OccupiedFeature(featureId); });
-        }
+        occupiedGrid.forEach(occupiedGrid.clipRegion(footprintRegion), [&](auto& cell) {
+            cell.featureId = featureId;
+        });
 
         if (!featureDefinition.blocking && featureDefinition.indestructible && featureDefinition.metal)
         {
-            auto footprintRegion = computeFootprintRegion(f.position, featureDefinition.footprintX, featureDefinition.footprintZ);
             metalGrid.set(metalGrid.clipRegion(footprintRegion), featureDefinition.metal);
+        }
+
+        if (!featureDefinition.blocking && featureDefinition.indestructible && featureDefinition.geothermal)
+        {
+            geoGrid.set(geoGrid.clipRegion(footprintRegion), true);
         }
 
         return featureId;
@@ -147,7 +162,7 @@ namespace rwe
         return position;
     }
 
-    FeatureId GameSimulation::addFeature(FeatureDefinitionId featureType, int heightmapX, int heightmapZ)
+    std::optional<FeatureId> GameSimulation::addFeature(FeatureDefinitionId featureType, int heightmapX, int heightmapZ)
     {
         const auto& featureDefinition = getFeatureDefinition(featureType);
         auto resolvedPos = computeFeaturePosition(terrain, featureDefinition, heightmapX, heightmapZ);
@@ -288,20 +303,20 @@ namespace rwe
 
         if (unitDefinition.isMobile)
         {
-            occupiedGrid.forEach(*footprintRegion, [unitId](auto& cell) { cell.occupiedType = OccupiedUnit(unitId); });
+            occupiedGrid.forEach(*footprintRegion, [unitId](auto& cell) { cell.mobileUnitId = unitId; });
         }
         else
         {
             assert(!!unitDefinition.yardMap);
             occupiedGrid.forEach2(footprintRegion->x, footprintRegion->y, *unitDefinition.yardMap, [&](auto& cell, const auto& yardMapCell) {
-                cell.buildingCell = BuildingOccupiedCell{unitId, isPassable(yardMapCell, insertedUnit.yardOpen)};
+                cell.buildingInfo = OccupiedCellBuildingInfo{unitId, isPassable(yardMapCell, insertedUnit.yardOpen)};
             });
         }
 
         return unitId;
     }
 
-    bool GameSimulation::canBeBuiltAt(const rwe::MovementClass& mc, unsigned int x, unsigned int y) const
+    bool GameSimulation::canBeBuiltAt(const rwe::MovementClassDefinition& mc, const std::optional<Grid<YardMapCell>>& yardMap, bool yardMapContainsGeo, unsigned int x, unsigned int y) const
     {
         if (isCollisionAt(DiscreteRect(x, y, mc.footprintX, mc.footprintZ)))
         {
@@ -309,6 +324,11 @@ namespace rwe
         }
 
         if (!isGridPointWalkable(terrain, mc, x, y))
+        {
+            return false;
+        }
+
+        if (yardMapContainsGeo && yardMap && !containsAnyGeoMatch(*yardMap, x, y))
         {
             return false;
         }
@@ -336,6 +356,26 @@ namespace rwe
         return computeFootprintRegion(position, footprintX, footprintZ);
     }
 
+    bool GameSimulation::anyFeatureOccupies(const DiscreteRect& rect) const
+    {
+        auto region = occupiedGrid.tryToRegion(rect);
+        if (!region)
+        {
+            return true;
+        }
+
+        return occupiedGrid.any(*region, [&](const auto& cell) {
+            return cell.featureId.has_value();
+        });
+    }
+
+    bool GameSimulation::containsAnyGeoMatch(const Grid<YardMapCell>& yardMap, unsigned int x, unsigned int y) const
+    {
+        return geoGrid.any2(x, y, yardMap, [](const bool& geo, const YardMapCell& cell) {
+            return geo && isGeo(cell);
+        });
+    }
+
     bool GameSimulation::isCollisionAt(const DiscreteRect& rect) const
     {
         auto region = occupiedGrid.tryToRegion(rect);
@@ -350,19 +390,22 @@ namespace rwe
     bool GameSimulation::isCollisionAt(const GridRegion& region) const
     {
         return occupiedGrid.any(region, [&](const auto& cell) {
-            auto isColliding = match(
-                cell.occupiedType,
-                [](const OccupiedNone&) { return false; },
-                [](const OccupiedUnit&) { return true; },
-                [](const OccupiedFeature&) { return true; });
-            if (isColliding)
+            if (cell.mobileUnitId)
             {
                 return true;
             }
-
-            if (cell.buildingCell && !cell.buildingCell->passable)
+            if (cell.buildingInfo && !cell.buildingInfo->passable)
             {
                 return true;
+            }
+            if (cell.featureId)
+            {
+                const auto& f = getFeature(*cell.featureId);
+                const auto& def = getFeatureDefinition(f.featureName);
+                if (def.blocking)
+                {
+                    return true;
+                }
             }
 
             return false;
@@ -378,26 +421,29 @@ namespace rwe
         }
 
         return occupiedGrid.any(*region, [&](const auto& cell) {
-            auto inCollision = match(
-                cell.occupiedType,
-                [&](const OccupiedNone&) { return false; },
-                [&](const OccupiedUnit& u) { return u.id != self; },
-                [&](const OccupiedFeature&) { return true; });
-            if (inCollision)
+            if (cell.mobileUnitId && *cell.mobileUnitId != self)
             {
                 return true;
             }
-
-            if (cell.buildingCell && cell.buildingCell->unit != self && !cell.buildingCell->passable)
+            if (cell.buildingInfo && !cell.buildingInfo->passable)
             {
                 return true;
+            }
+            if (cell.featureId)
+            {
+                const auto& f = getFeature(*cell.featureId);
+                const auto& def = getFeatureDefinition(f.featureName);
+                if (def.blocking)
+                {
+                    return true;
+                }
             }
 
             return false;
         });
     }
 
-    bool GameSimulation::isYardmapBlocked(unsigned int x, unsigned int y, const Grid<YardMapCell>& yardMap, bool open) const
+    bool GameSimulation::isYardmapBlocked(unsigned int x, unsigned int y, const Grid<YardMapCell>& yardMap, bool open, UnitId self) const
     {
         return occupiedGrid.any2(x, y, yardMap, [&](const auto& cell, const auto& yardMapCell) {
             if (isPassable(yardMapCell, open))
@@ -405,14 +451,22 @@ namespace rwe
                 return false;
             }
 
-            auto inCollision = match(
-                cell.occupiedType,
-                [&](const OccupiedNone&) { return false; },
-                [&](const OccupiedUnit&) { return true; },
-                [&](const OccupiedFeature&) { return true; });
-            if (inCollision)
+            if (cell.mobileUnitId)
             {
                 return true;
+            }
+            if (cell.buildingInfo && !cell.buildingInfo->passable && cell.buildingInfo->unit != self)
+            {
+                return true;
+            }
+            if (cell.featureId)
+            {
+                const auto& f = getFeature(*cell.featureId);
+                const auto& def = getFeatureDefinition(f.featureName);
+                if (def.blocking)
+                {
+                    return true;
+                }
             }
 
             return false;
@@ -530,6 +584,16 @@ namespace rwe
         return it->second;
     }
 
+    std::optional<std::reference_wrapper<MapFeature>> GameSimulation::tryGetFeature(FeatureId id)
+    {
+        return tryFind(features, id);
+    }
+
+    std::optional<std::reference_wrapper<const MapFeature>> GameSimulation::tryGetFeature(FeatureId id) const
+    {
+        return tryFind(features, id);
+    }
+
     GamePlayerInfo& GameSimulation::getPlayer(PlayerId player)
     {
         return players.at(player.value);
@@ -592,8 +656,8 @@ namespace rwe
         auto newRegion = occupiedGrid.tryToRegion(newRect);
         assert(!!newRegion);
 
-        occupiedGrid.forEach(*oldRegion, [](auto& cell) { cell.occupiedType = OccupiedNone(); });
-        occupiedGrid.forEach(*newRegion, [unitId](auto& cell) { cell.occupiedType = OccupiedUnit(unitId); });
+        occupiedGrid.forEach(*oldRegion, [](auto& cell) { cell.mobileUnitId = std::nullopt; });
+        occupiedGrid.forEach(*newRegion, [unitId](auto& cell) { cell.mobileUnitId = unitId; });
     }
 
     void GameSimulation::requestPath(UnitId unitId)
@@ -717,13 +781,13 @@ namespace rwe
         assert(!!footprintRegion);
 
         assert(!!unitDefinition.yardMap);
-        if (isYardmapBlocked(footprintRegion->x, footprintRegion->y, *unitDefinition.yardMap, open))
+        if (isYardmapBlocked(footprintRegion->x, footprintRegion->y, *unitDefinition.yardMap, open, unitId))
         {
             return false;
         }
 
         occupiedGrid.forEach2(footprintRegion->x, footprintRegion->y, *unitDefinition.yardMap, [&](auto& cell, const auto& yardMapCell) {
-            cell.buildingCell = BuildingOccupiedCell{unitId, isPassable(yardMapCell, open)};
+            cell.buildingInfo = OccupiedCellBuildingInfo{unitId, isPassable(yardMapCell, open)};
         });
 
         unit.yardOpen = open;
@@ -740,14 +804,9 @@ namespace rwe
         assert(!!footprintRegion);
 
         occupiedGrid.forEach(*footprintRegion, [&](const auto& e) {
-            auto unitId = match(
-                e.occupiedType,
-                [&](const OccupiedUnit& u) { return std::optional(u.id); },
-                [&](const auto&) { return std::optional<UnitId>(); });
-
-            if (unitId)
+            if (e.mobileUnitId)
             {
-                tellToBuggerOff(*unitId, footprintRect);
+                tellToBuggerOff(*e.mobileUnitId, footprintRect);
             }
         });
     }
@@ -832,12 +891,12 @@ namespace rwe
         }
     }
 
-    MovementClass GameSimulation::getAdHocMovementClass(const UnitDefinition::MovementCollisionInfo& info) const
+    MovementClassDefinition GameSimulation::getAdHocMovementClass(const UnitDefinition::MovementCollisionInfo& info) const
     {
         return match(
             info,
             [&](const UnitDefinition::AdHocMovementClass& mc) {
-                return MovementClass{
+                return MovementClassDefinition{
                     "",
                     mc.footprintX,
                     mc.footprintZ,
@@ -847,7 +906,7 @@ namespace rwe
                     mc.maxWaterSlope};
             },
             [&](const UnitDefinition::NamedMovementClass& mc) {
-                return movementClassDefinitions.at(mc.movementClassId);
+                return movementClassDatabase.getMovementClass(mc.movementClassId);
             });
     }
 
@@ -859,7 +918,7 @@ namespace rwe
                 return std::make_pair(mc.footprintX, mc.footprintZ);
             },
             [&](const UnitDefinition::NamedMovementClass& mc) {
-                const auto& mcDef = movementClassDefinitions.at(mc.movementClassId);
+                const auto& mcDef = movementClassDatabase.getMovementClass(mc.movementClassId);
                 return std::make_pair(mcDef.footprintX, mcDef.footprintZ);
             });
     }
@@ -877,73 +936,52 @@ namespace rwe
 
     bool projectileCollides(const GameSimulation& sim, const Projectile& projectile, const OccupiedCell& cellValue)
     {
-        auto collidesWithOccupiedCell = match(
-            cellValue.occupiedType,
-            [&](const OccupiedUnit& v) {
-                const auto& unit = sim.getUnitState(v.id);
+        auto projMinY = std::min(projectile.previousPosition.y, projectile.position.y);
+        auto projMaxY = std::max(projectile.previousPosition.y, projectile.position.y);
 
-                if (unit.isOwnedBy(projectile.owner))
-                {
-                    return false;
-                }
-
+        // Check mobile unit
+        if (cellValue.mobileUnitId)
+        {
+            const auto& unit = sim.getUnitState(*cellValue.mobileUnitId);
+            if (!unit.isOwnedBy(projectile.owner))
+            {
                 const auto& unitDefinition = sim.unitDefinitions.at(unit.unitType);
                 const auto& modelDefinition = sim.unitModelDefinitions.at(unitDefinition.objectName);
-
-                // Check if the projectile crossed through the unit's height range
-                // between previousPosition and current position
                 auto unitBottom = unit.position.y;
                 auto unitTop = unit.position.y + modelDefinition.height;
-                auto projMinY = std::min(projectile.previousPosition.y, projectile.position.y);
-                auto projMaxY = std::max(projectile.previousPosition.y, projectile.position.y);
-                if (projMaxY < unitBottom || projMinY > unitTop)
+                if (projMaxY >= unitBottom && projMinY <= unitTop)
                 {
-                    return false;
+                    return true;
                 }
-
-                return true;
-            },
-            [&](const OccupiedFeature& v) {
-                const auto& feature = sim.getFeature(v.id);
-                const auto& featureDefinition = sim.getFeatureDefinition(feature.featureName);
-
-                // ignore if the projectile is above or below the feature
-                if (projectile.position.y < feature.position.y || projectile.position.y > feature.position.y + featureDefinition.height)
-                {
-                    return false;
-                }
-
-                return true;
-            },
-
-            [&](const OccupiedNone&) {
-                return false;
-            });
-
-        if (collidesWithOccupiedCell)
-        {
-            return true;
+            }
         }
 
-        if (cellValue.buildingCell && !cellValue.buildingCell->passable)
+        // Check building
+        if (cellValue.buildingInfo)
         {
-            const auto& unit = sim.getUnitState(cellValue.buildingCell->unit);
-
-            if (unit.isOwnedBy(projectile.owner))
+            const auto& unit = sim.getUnitState(cellValue.buildingInfo->unit);
+            if (!unit.isOwnedBy(projectile.owner))
             {
-                return false;
+                const auto& unitDefinition = sim.unitDefinitions.at(unit.unitType);
+                const auto& modelDefinition = sim.unitModelDefinitions.at(unitDefinition.objectName);
+                auto unitBottom = unit.position.y;
+                auto unitTop = unit.position.y + modelDefinition.height;
+                if (projMaxY >= unitBottom && projMinY <= unitTop)
+                {
+                    return true;
+                }
             }
+        }
 
-            const auto& unitDefinition = sim.unitDefinitions.at(unit.unitType);
-            const auto& modelDefinition = sim.unitModelDefinitions.at(unitDefinition.objectName);
-
-            // ignore if the projectile is above or below the unit
-            if (projectile.position.y < unit.position.y || projectile.position.y > unit.position.y + modelDefinition.height)
+        // Check feature
+        if (cellValue.featureId)
+        {
+            const auto& feature = sim.getFeature(*cellValue.featureId);
+            const auto& featureDefinition = sim.getFeatureDefinition(feature.featureName);
+            if (!(projectile.position.y < feature.position.y || projectile.position.y > feature.position.y + featureDefinition.height))
             {
-                return false;
+                return true;
             }
-
-            return true;
         }
 
         return false;
@@ -1109,7 +1147,19 @@ namespace rwe
         auto& unit = getUnitState(unitId);
         if (unit.hitPoints <= damagePoints)
         {
-            killUnit(unitId);
+            const auto& unitDefinition = unitDefinitions.at(unit.unitType);
+            if (unit.isBeingBuilt(unitDefinition))
+            {
+                // Units that are still under construction
+                // die quietly without a corpse.
+                // FIXME: units in TA that are not actively receiving build input
+                // die with an explosion, even though they leave no corpse.
+                quietlyKillUnit(unitId);
+            }
+            else
+            {
+                killUnit(unitId);
+            }
         }
         else
         {
@@ -1153,13 +1203,11 @@ namespace rwe
 
           // check if a unit (or feature) is there
           auto occupiedType = occupiedGrid.get(coords);
-          auto u = match(
-              occupiedType.occupiedType,
-              [&](const OccupiedUnit& u) { return std::optional(u.id); },
-              [&](const auto&) { return std::optional<UnitId>(); });
-          if (!u && occupiedType.buildingCell && !occupiedType.buildingCell->passable)
+
+          auto u = occupiedType.mobileUnitId;
+          if (!u && occupiedType.buildingInfo && !occupiedType.buildingInfo->passable)
           {
-              u = occupiedType.buildingCell->unit;
+              u = occupiedType.buildingInfo->unit;
           }
           if (!u)
           {
@@ -1372,6 +1420,28 @@ namespace rwe
         }
     }
 
+    void GameSimulation::updateWind()
+    {
+        if (gameTime >= nextWindSpeedChange)
+        {
+            // the wind speed will last between 5 and 14 seconds before changing
+            std::uniform_int_distribution<int> durationDist(5, 14);
+            nextWindSpeedChange = gameTime + GameTime(durationDist(rng) * SimTicksPerSecond);
+
+            // the new wind speed is taken from a uniform distribution between the min and max speeds
+            std::uniform_int_distribution<int> speedDist(minWindSpeed, maxWindSpeed);
+            auto currentWindSpeed = speedDist(rng);
+
+            // the new wind direction is a random angle
+            std::uniform_int_distribution<int> directionDist(MinAngle.value, MaxAngle.value);
+            auto currentWindDirection = SimAngle(directionDist(rng));
+
+            currentWindGenerationFactor = SimScalar(currentWindSpeed) / SimScalar(MaxUtilizableWindSpeed);
+
+            UnitBehaviorService(this).updateWind(currentWindGenerationFactor, currentWindDirection);
+        }
+    }
+
     void GameSimulation::updateResources()
     {
         // run resource updates once per second
@@ -1465,6 +1535,12 @@ namespace rwe
 
                 if (unit.activated)
                 {
+                    if (unitDefinition.windGenerator != Energy(0))
+                    {
+                        // generate energy from wind
+                        addResourceDelta(unitId, unitDefinition.windGenerator * currentWindGenerationFactor, Metal(0));
+                    }
+
                     if (unit.isSufficientlyPowered)
                     {
                         // extract metal
@@ -1473,6 +1549,12 @@ namespace rwe
                             auto footprint = computeFootprintRegion(unit.position, unitDefinition.movementCollisionInfo);
                             auto metalValue = metalGrid.accumulate(metalGrid.clipRegion(footprint), 0u, std::plus<>());
                             addResourceDelta(unitId, Energy(0), Metal(metalValue * unitDefinition.extractsMetal.value));
+                        }
+
+                        // make metal
+                        if (unitDefinition.makesMetal != Metal(0))
+                        {
+                            addResourceDelta(unitId, Energy(0), unitDefinition.makesMetal);
                         }
                     }
 
@@ -1494,7 +1576,6 @@ namespace rwe
         auto featureId = tryGetFeatureDefinitionId(featureType).value();
         auto feature = MapFeature{featureId, position, rotation};
 
-        // FIXME: simulation needs to support failing to spawn in a feature
         addFeature(std::move(feature));
     }
 
@@ -1513,7 +1594,7 @@ namespace rwe
                 continue;
             }
 
-            if (!unitDefinition.corpse.empty())
+            if (deadState->leaveCorpse && !unitDefinition.corpse.empty())
             {
                 corpsesToSpawn.push_back(CorpseSpawnInfo{
                     unitDefinition.corpse,
@@ -1532,15 +1613,15 @@ namespace rwe
                 }
                 else
                 {
-                    occupiedGrid.forEach(*footprintRegion, [](auto& cell) { cell.occupiedType = OccupiedNone(); });
+                    occupiedGrid.forEach(*footprintRegion, [](auto& cell) { cell.mobileUnitId = std::nullopt; });
                 }
             }
             else
             {
                 occupiedGrid.forEach(*footprintRegion, [&](auto& cell) {
-                  if (cell.buildingCell && cell.buildingCell->unit == it->first)
+                  if (cell.buildingInfo && cell.buildingInfo->unit == it->first)
                   {
-                      cell.buildingCell = std::nullopt;
+                      cell.buildingInfo = std::nullopt;
                   } });
             }
 
@@ -1623,6 +1704,8 @@ namespace rwe
     void GameSimulation::tick()
     {
         gameTime += GameTime(1);
+
+        updateWind();
 
         updateResources();
 

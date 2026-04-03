@@ -1,11 +1,10 @@
 #pragma once
 
-#include <rwe/io/tdf/TdfBlock.h>
 #include <string>
 
 namespace rwe
 {
-    struct MovementClass
+    struct MovementClassDefinition
     {
         std::string name;
         unsigned int footprintX;
@@ -15,8 +14,4 @@ namespace rwe
         unsigned int maxSlope;
         unsigned int maxWaterSlope;
     };
-
-    MovementClass parseMovementClass(const TdfBlock& block);
-
-    std::vector<std::pair<std::string, MovementClass>> parseMovementTdf(const TdfBlock& root);
 }

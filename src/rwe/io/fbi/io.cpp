@@ -25,6 +25,7 @@ namespace rwe
         tdf.readOrDefault("MovementClass", u.movementClass);
 
         tdf.readOrDefault("Name", u.name);
+        tdf.readOrDefault("Description", u.description);
 
         tdf.readOrDefault("TurnRate", u.turnRate);
         tdf.readOrDefault("MaxVelocity", u.maxVelocity);
@@ -81,6 +82,7 @@ namespace rwe
         tdf.readOrDefault("ExtractsMetal", u.extractsMetal);
         tdf.readOrDefault("EnergyStorage", u.energyStorage);
         tdf.readOrDefault("MetalStorage", u.metalStorage);
+        tdf.readOrDefault("WindGenerator", u.windGenerator);
 
         tdf.readOrDefault("MakesMetal", u.makesMetal);
 

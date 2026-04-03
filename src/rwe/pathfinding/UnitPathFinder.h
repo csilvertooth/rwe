@@ -1,13 +1,10 @@
 #pragma once
 
-#include <rwe/game/MovementClassCollisionService.h>
-#include <rwe/grid/DiscreteRect.h>
-#include <rwe/grid/EightWayDirection.h>
-#include <rwe/pathfinding/AStarPathFinder.h>
+#include <rwe/grid/Point.h>
 #include <rwe/pathfinding/AbstractUnitPathFinder.h>
 #include <rwe/pathfinding/PathCost.h>
-#include <rwe/pathfinding/pathfinding_utils.h>
 #include <rwe/sim/GameSimulation.h>
+#include <rwe/sim/MovementClassCollisionService.h>
 #include <rwe/sim/UnitId.h>
 
 namespace rwe
