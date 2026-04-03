@@ -71,6 +71,12 @@ namespace rwe
     {
         auto unitInfo = sim->getUnitInfo(unitId);
 
+        // Stunned units cannot act
+        if (unitInfo.state->stunned)
+        {
+            return;
+        }
+
         // Clear steering targets.
         match(
             unitInfo.state->physics,
@@ -599,7 +605,7 @@ namespace rwe
 
         auto targetUnit = std::get_if<UnitId>(&attackInfo->target);
         auto targetUnitOption = targetUnit == nullptr ? std::optional<UnitId>() : std::make_optional(*targetUnit);
-        sim->spawnProjectile(unit.owner, *weapon, firingPoint, direction, (fireInfo->targetPosition - firingPoint).length(), targetUnitOption);
+        sim->spawnProjectile(unit.owner, *weapon, firingPoint, direction, (fireInfo->targetPosition - firingPoint).length(), targetUnitOption, id);
 
         sim->events.push_back(FireWeaponEvent{weapon->weaponType, fireInfo->burstsFired, firingPoint});
 

@@ -218,6 +218,8 @@ namespace rwe
         weaponDefinition.onlyTargetCategory = splitCategories(tdf.onlyTargetCategory);
         weaponDefinition.noChaseCategory = splitCategories(tdf.noChaseCategory);
 
+        weaponDefinition.paralyzer = tdf.paralyzer;
+
         return weaponDefinition;
     }
 

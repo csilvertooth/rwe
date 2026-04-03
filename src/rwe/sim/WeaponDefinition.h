@@ -58,5 +58,8 @@ namespace rwe
 
         /** Category tags this weapon will not chase. */
         std::vector<std::string> noChaseCategory;
+
+        /** If true, weapon paralyzes instead of damaging. */
+        bool paralyzer{false};
     };
 }

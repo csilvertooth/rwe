@@ -717,13 +717,16 @@ namespace rwe
         projectile.groundBounce = weaponDefinition.groundBounce;
 
         projectile.targetUnit = targetUnit;
+        projectile.paralyzer = weaponDefinition.paralyzer;
 
         return projectile;
     }
 
-    void GameSimulation::spawnProjectile(PlayerId owner, const UnitWeapon& weapon, const SimVector& position, const SimVector& direction, SimScalar distanceToTarget, std::optional<UnitId> targetUnit)
+    void GameSimulation::spawnProjectile(PlayerId owner, const UnitWeapon& weapon, const SimVector& position, const SimVector& direction, SimScalar distanceToTarget, std::optional<UnitId> targetUnit, std::optional<UnitId> sourceUnit)
     {
-        projectiles.emplace(createProjectileFromWeapon(owner, weapon, position, direction, distanceToTarget, targetUnit));
+        auto projectile = createProjectileFromWeapon(owner, weapon, position, direction, distanceToTarget, targetUnit);
+        projectile.sourceUnit = sourceUnit;
+        projectiles.emplace(std::move(projectile));
     }
 
     WinStatus GameSimulation::computeWinStatus() const
@@ -1142,18 +1145,39 @@ namespace rwe
         }
     }
 
-    void GameSimulation::applyDamage(UnitId unitId, unsigned int damagePoints)
+    void GameSimulation::applyDamage(UnitId unitId, unsigned int damagePoints, std::optional<UnitId> sourceUnit, bool paralyzer)
     {
         auto& unit = getUnitState(unitId);
+
+        if (paralyzer)
+        {
+            // Paralyzer weapons accumulate stun damage instead of HP damage
+            unit.stunDamage += damagePoints;
+            const auto& unitDefinition = unitDefinitions.at(unit.unitType);
+            if (unit.stunDamage >= unitDefinition.maxHitPoints)
+            {
+                unit.stunned = true;
+            }
+            return;
+        }
+
         if (unit.hitPoints <= damagePoints)
         {
+            // Credit the kill to the source unit for veterancy
+            if (sourceUnit)
+            {
+                auto attackerOption = tryGetUnitState(*sourceUnit);
+                if (attackerOption)
+                {
+                    auto& attacker = attackerOption->get();
+                    attacker.killCount++;
+                    attacker.veteranLevel = std::min(attacker.killCount / 3u, 3u);
+                }
+            }
+
             const auto& unitDefinition = unitDefinitions.at(unit.unitType);
             if (unit.isBeingBuilt(unitDefinition))
             {
-                // Units that are still under construction
-                // die quietly without a corpse.
-                // FIXME: units in TA that are not actively receiving build input
-                // die with an explosion, even though they leave no corpse.
                 quietlyKillUnit(unitId);
             }
             else
@@ -1241,7 +1265,7 @@ namespace rwe
           auto damageScale = std::clamp(1_ss - (rweSqrt(unitDistanceSquared) / radius), 0_ss, 1_ss);
           auto rawDamage = projectile.getDamage(unit.unitType);
           auto scaledDamage = simScalarToUInt(SimScalar(rawDamage) * damageScale);
-          applyDamage(*u, scaledDamage); });
+          applyDamage(*u, scaledDamage, projectile.sourceUnit, projectile.paralyzer); });
 
         // Apply damage to flying units
         for (const auto& flyingUnitId : flyingUnitsSet)
@@ -1265,7 +1289,7 @@ namespace rwe
             auto damageScale = std::clamp(1_ss - (rweSqrt(unitDistanceSquared) / radius), 0_ss, 1_ss);
             auto rawDamage = projectile.getDamage(unit.unitType);
             auto scaledDamage = simScalarToUInt(SimScalar(rawDamage) * damageScale);
-            applyDamage(flyingUnitId, scaledDamage);
+            applyDamage(flyingUnitId, scaledDamage, projectile.sourceUnit, projectile.paralyzer);
         }
     }
 
@@ -1725,6 +1749,17 @@ namespace rwe
             }
 
             runUnitCobScripts(*this, unitId);
+
+            // Decay stun damage over time (~7.5 per second = 1 every 4 ticks)
+            if (unit.stunDamage > 0 && (gameTime.value % 4 == 0))
+            {
+                unit.stunDamage--;
+                const auto& unitDefinition = unitDefinitions.at(unit.unitType);
+                if (unit.stunDamage < unitDefinition.maxHitPoints)
+                {
+                    unit.stunned = false;
+                }
+            }
         }
 
         updateProjectiles();

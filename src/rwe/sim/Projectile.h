@@ -42,6 +42,12 @@ namespace rwe
         /** The unit that this projectile is tracking, if any. */
         std::optional<UnitId> targetUnit;
 
+        /** The unit that fired this projectile (for veterancy credit). */
+        std::optional<UnitId> sourceUnit;
+
+        /** If true, this projectile paralyzes instead of damaging. */
+        bool paralyzer{false};
+
         SimVector getBackPosition(SimScalar duration) const;
 
         SimVector getPreviousBackPosition(SimScalar duration) const;

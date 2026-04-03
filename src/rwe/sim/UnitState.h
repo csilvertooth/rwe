@@ -265,6 +265,11 @@ namespace rwe
         unsigned int buildTimeCompleted{0};
 
         bool activated{false};
+
+        /** Accumulated paralyzer/EMP damage. Unit is stunned when this exceeds maxHitPoints. */
+        unsigned int stunDamage{0};
+        /** If true, unit is currently paralyzed and cannot act. */
+        bool stunned{false};
         bool isSufficientlyPowered{false};
 
         bool armored{false};

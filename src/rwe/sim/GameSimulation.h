@@ -404,7 +404,7 @@ namespace rwe
 
         Projectile createProjectileFromWeapon(PlayerId owner, const std::string& weaponType, const SimVector& position, const SimVector& direction, SimScalar distanceToTarget, std::optional<UnitId> targetUnit);
 
-        void spawnProjectile(PlayerId owner, const UnitWeapon& weapon, const SimVector& position, const SimVector& direction, SimScalar distanceToTarget, std::optional<UnitId> targetUnit);
+        void spawnProjectile(PlayerId owner, const UnitWeapon& weapon, const SimVector& position, const SimVector& direction, SimScalar distanceToTarget, std::optional<UnitId> targetUnit, std::optional<UnitId> sourceUnit = std::nullopt);
 
         WinStatus computeWinStatus() const;
 
@@ -445,7 +445,7 @@ namespace rwe
 
         void killUnit(UnitId unitId);
 
-        void applyDamage(UnitId unitId, unsigned int damagePoints);
+        void applyDamage(UnitId unitId, unsigned int damagePoints, std::optional<UnitId> sourceUnit = std::nullopt, bool paralyzer = false);
 
         void applyDamageInRadius(const SimVector& position, SimScalar radius, const Projectile& projectile);
 
