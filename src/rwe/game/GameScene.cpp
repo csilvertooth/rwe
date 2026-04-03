@@ -1162,6 +1162,12 @@ namespace rwe
 
     void GameScene::onKeyDown(const SDL_Keysym& keysym)
     {
+        // When cheat console is active, swallow all keys — ImGui handles input
+        if (cheatConsoleActive)
+        {
+            return;
+        }
+
         currentPanel->keyDown(KeyEvent(keysym.sym));
 
         if (keysym.sym == SDLK_UP)
