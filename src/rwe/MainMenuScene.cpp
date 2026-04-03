@@ -176,7 +176,7 @@ namespace rwe
         auto panel = uiFactory.panelFromGuiFile("MAINMENU", "FrontendX", *parsedGui);
         if (auto debugStrLabel = panel->find<UiLabel>("DebugString"))
         {
-            debugStrLabel->get().setText(ProjectNameVersion);
+            debugStrLabel->get().setText(ProjectNameVersion + " (based on RWE by MHeasell)");
             debugStrLabel->get().setAlignment(UiLabel::Alignment::Center);
         }
         goToMenu(std::move(panel));
