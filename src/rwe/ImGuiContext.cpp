@@ -50,7 +50,11 @@ namespace rwe
         io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         ImGui::StyleColorsDark();
         ImGui_ImplSDL2_InitForOpenGL(window, glContext);
+#ifdef __APPLE__
+        ImGui_ImplOpenGL3_Init("#version 150");
+#else
         ImGui_ImplOpenGL3_Init("#version 130");
+#endif
     }
 
     void ImGuiContext::newFrame(SDL_Window* window)
