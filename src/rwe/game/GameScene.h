@@ -271,6 +271,7 @@ namespace rwe
         int unitSpawnPlayer{0};
 
         bool cheatConsoleActive{false};
+        bool cheatConsoleJustClosed{false};
         char cheatConsoleText[64]{""};
 
         std::mutex playingUnitChannelsLock;

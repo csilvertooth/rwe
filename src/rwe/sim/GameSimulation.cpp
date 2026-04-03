@@ -890,8 +890,13 @@ namespace rwe
                 const auto& unitDefinition = sim.unitDefinitions.at(unit.unitType);
                 const auto& modelDefinition = sim.unitModelDefinitions.at(unitDefinition.objectName);
 
-                // ignore if the projectile is above or below the unit
-                if (projectile.position.y < unit.position.y || projectile.position.y > unit.position.y + modelDefinition.height)
+                // Check if the projectile crossed through the unit's height range
+                // between previousPosition and current position
+                auto unitBottom = unit.position.y;
+                auto unitTop = unit.position.y + modelDefinition.height;
+                auto projMinY = std::min(projectile.previousPosition.y, projectile.position.y);
+                auto projMaxY = std::max(projectile.previousPosition.y, projectile.position.y);
+                if (projMaxY < unitBottom || projMinY > unitTop)
                 {
                     return false;
                 }
@@ -965,8 +970,12 @@ namespace rwe
 
         const auto& modelDefinition = sim.unitModelDefinitions.at(unitDefinition.objectName);
 
-        // ignore if the projectile is above or below the unit
-        if (projectile.position.y < unit.position.y || projectile.position.y > unit.position.y + modelDefinition.height)
+        // Check if the projectile crossed through the unit's height range
+        auto unitBottom = unit.position.y;
+        auto unitTop = unit.position.y + modelDefinition.height;
+        auto projMinY = std::min(projectile.previousPosition.y, projectile.position.y);
+        auto projMaxY = std::max(projectile.previousPosition.y, projectile.position.y);
+        if (projMaxY < unitBottom || projMinY > unitTop)
         {
             return false;
         }
