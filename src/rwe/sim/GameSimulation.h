@@ -8,6 +8,7 @@
 #include <rwe/geometry/BoundingBox3x.h>
 #include <rwe/pathfinding/PathFindingService.h>
 #include <rwe/sim/FeatureDefinition.h>
+#include <rwe/sim/FogOfWar.h>
 #include <rwe/sim/FeatureId.h>
 #include <rwe/sim/GameHash.h>
 #include <rwe/sim/GameTime.h>
@@ -273,6 +274,9 @@ namespace rwe
         OccupiedGrid occupiedGrid;
         std::set<UnitId> flyingUnitsSet;
 
+        /** Per-player fog of war visibility grids. */
+        std::vector<PlayerFogOfWar> fogOfWar;
+
         Grid<unsigned char> metalGrid;
 
         Grid<bool> geoGrid;
@@ -470,6 +474,12 @@ namespace rwe
         void spawnNewUnits();
 
         void tick();
+
+        void updateFogOfWar();
+
+        void initFogOfWar();
+
+        bool isUnitVisible(PlayerId viewer, UnitId target) const;
 
         std::optional<FeatureDefinitionId> tryGetFeatureDefinitionId(const std::string& featureName) const;
 

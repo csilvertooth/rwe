@@ -95,6 +95,8 @@ namespace rwe
 
         tdf.readOrDefault("Category", u.category);
 
+        tdf.readOrDefault("SightDistance", u.sightDistance);
+
         return u;
     }
 }

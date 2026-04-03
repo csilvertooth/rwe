@@ -269,6 +269,11 @@ namespace rwe
         /** Self-destruct countdown in ticks. nullopt = not self-destructing. */
         std::optional<GameTime> selfDestructCountdown;
 
+        /** Cached cells this unit is illuminating for fog of war. */
+        std::vector<Point> currentVisibleCells;
+        /** Heightmap position where visibility was last computed. */
+        Point lastVisibilityPosition{-1, -1};
+
         /** Accumulated paralyzer/EMP damage. Unit is stunned when this exceeds maxHitPoints. */
         unsigned int stunDamage{0};
         /** If true, unit is currently paralyzed and cannot act. */

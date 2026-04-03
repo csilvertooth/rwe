@@ -411,6 +411,12 @@ namespace rwe
                         continue;
                     }
 
+                    // Can't target units we can't see (fog of war)
+                    if (!sim->isUnitVisible(unit.owner, otherUnitId))
+                    {
+                        continue;
+                    }
+
                     if (unit.position.distanceSquared(otherUnit.position) > weaponDefinition.maxRange * weaponDefinition.maxRange)
                     {
                         continue;

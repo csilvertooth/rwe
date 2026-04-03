@@ -356,6 +356,8 @@ namespace rwe
 
         u.categories = splitCategories(fbi.category);
 
+        u.sightDistance = fbi.sightDistance;
+
         u.yardMapContainsGeo = false;
 
         auto movementClassId = movementClassDatabase.resolveMovementClassByName(fbi.movementClass);

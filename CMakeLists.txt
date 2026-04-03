@@ -460,6 +460,8 @@ set(SOURCE_FILES
     src/rwe/sim/GameHash.h
     src/rwe/sim/GameHash_util.cpp
     src/rwe/sim/GameHash_util.h
+    src/rwe/sim/FogOfWar.cpp
+    src/rwe/sim/FogOfWar.h
     src/rwe/sim/GameSimulation.cpp
     src/rwe/sim/GameSimulation.h
     src/rwe/sim/GameTime.cpp

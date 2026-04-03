@@ -82,5 +82,7 @@ namespace rwe
         std::string corpse;
 
         std::string category;
+
+        unsigned int sightDistance{0};
     };
 }

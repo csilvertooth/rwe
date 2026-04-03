@@ -134,5 +134,8 @@ namespace rwe
 
         /** Space-separated category tags, e.g. "KBOT WEAPON LEVEL1 NOTAIR" */
         std::vector<std::string> categories;
+
+        /** Line-of-sight distance in world units. */
+        unsigned int sightDistance{0};
     };
 }

@@ -4,8 +4,6 @@ A cross-platform, open-source game engine for Total Annihilation,
 focused on faithful recreation of the original gameplay experience
 with support for modern systems and mods like TA Escalation.
 
-**Built on [Robot War Engine](https://github.com/MHeasell/rwe) by Michael Heasell.**
-
 ## About
 
 Annihilation Engine is a fork of the Robot War Engine (RWE) project,
@@ -22,7 +20,7 @@ with Total Annihilation data files. This fork focuses on:
 
 This project would not be possible without the work of:
 
-- **Michael Heasell (MHeasell)** -- Creator of Robot War Engine, the foundation
+- **Michael Heasell (MHeasell)** -- Creator of Robot War Engine, the foundation of
   this project is built upon. Licensed under GPLv3.
   https://github.com/MHeasell/rwe
 - **Cavedog Entertainment** -- Original creators of Total Annihilation (1997).

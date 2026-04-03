@@ -232,6 +232,8 @@ namespace rwe
             throw std::runtime_error("No local player!");
         }
 
+        simulation.initFogOfWar();
+
         auto gameNetworkService = std::make_unique<GameNetworkService>(*localPlayerId, std::stoi(gameParameters.localNetworkPort), endpointInfos, playerCommandService.get());
 
         auto minimapDots = sceneContext.textureService->getGafEntry("anims/FX.GAF", "radlogo");

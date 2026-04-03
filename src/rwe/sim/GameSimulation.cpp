@@ -1682,6 +1682,12 @@ namespace rwe
                   } });
             }
 
+            // Remove fog of war visibility for the dying unit
+            if (!unit.currentVisibleCells.empty() && unit.owner.value < fogOfWar.size())
+            {
+                removeVisibility(fogOfWar[unit.owner.value], unit.currentVisibleCells);
+            }
+
             it = units.erase(it);
         }
 
@@ -1808,6 +1814,8 @@ namespace rwe
 
         updateProjectiles();
 
+        updateFogOfWar();
+
         processVictoryCondition();
 
         deleteDeadUnits();
@@ -1815,6 +1823,97 @@ namespace rwe
         deleteDeadProjectiles();
 
         spawnNewUnits();
+    }
+
+    void GameSimulation::initFogOfWar()
+    {
+        auto gridWidth = terrain.getHeightMap().getWidth();
+        auto gridHeight = terrain.getHeightMap().getHeight();
+
+        fogOfWar.clear();
+        for (size_t i = 0; i < players.size(); ++i)
+        {
+            fogOfWar.emplace_back(gridWidth, gridHeight);
+        }
+    }
+
+    void GameSimulation::updateFogOfWar()
+    {
+        if (fogOfWar.empty())
+        {
+            return;
+        }
+
+        auto& heightmap = terrain.getHeightMap();
+
+        for (auto& [unitId, unit] : units)
+        {
+            if (unit.isDead())
+            {
+                continue;
+            }
+
+            auto heightmapPos = terrain.worldToHeightmapCoordinate(unit.position);
+
+            // Only recompute if unit moved to a new cell
+            if (heightmapPos == unit.lastVisibilityPosition)
+            {
+                continue;
+            }
+
+            auto playerIndex = unit.owner.value;
+            if (playerIndex >= fogOfWar.size())
+            {
+                continue;
+            }
+
+            auto& playerFog = fogOfWar[playerIndex];
+
+            // Remove old visibility
+            if (!unit.currentVisibleCells.empty())
+            {
+                removeVisibility(playerFog, unit.currentVisibleCells);
+            }
+
+            // Compute new visibility
+            const auto& unitDef = unitDefinitions.at(unit.unitType);
+            int sightRadiusCells = static_cast<int>(unitDef.sightDistance) / 16;
+            if (sightRadiusCells <= 0)
+            {
+                sightRadiusCells = 10; // default sight if not specified
+            }
+
+            unit.currentVisibleCells = computeVisibleCells(heightmap, heightmapPos.x, heightmapPos.y, sightRadiusCells);
+            unit.lastVisibilityPosition = heightmapPos;
+
+            // Add new visibility
+            addVisibility(playerFog, unit.currentVisibleCells);
+        }
+    }
+
+    bool GameSimulation::isUnitVisible(PlayerId viewer, UnitId target) const
+    {
+        auto targetOption = tryGetUnitState(target);
+        if (!targetOption)
+        {
+            return false;
+        }
+
+        const auto& targetUnit = targetOption->get();
+
+        // Own units are always visible
+        if (targetUnit.isOwnedBy(viewer))
+        {
+            return true;
+        }
+
+        if (viewer.value >= fogOfWar.size())
+        {
+            return true; // no fog data, assume visible
+        }
+
+        auto heightmapPos = terrain.worldToHeightmapCoordinate(targetUnit.position);
+        return isCellVisible(fogOfWar[viewer.value], heightmapPos.x, heightmapPos.y);
     }
 
     std::optional<FeatureDefinitionId> GameSimulation::tryGetFeatureDefinitionId(const std::string& featureName) const

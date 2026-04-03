@@ -521,9 +521,13 @@ namespace rwe
         auto cameraInverse = computeInverseViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height());
         auto worldToMinimap = worldToMinimapMatrix(simulation.terrain, minimapRect);
 
-        // draw minimap dots
-        for (const auto& [_, unit] : simulation.units)
+        // draw minimap dots (only for visible or owned units)
+        for (const auto& [unitId, unit] : simulation.units)
         {
+            if (!unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
+            {
+                continue;
+            }
             auto minimapPos = worldToMinimap * simVectorToFloat(unit.position);
             minimapPos.x = std::floor(minimapPos.x);
             minimapPos.y = std::floor(minimapPos.y);
@@ -753,8 +757,12 @@ namespace rwe
         auto seaLevel = simulation.terrain.getSeaLevel();
 
         UnitShadowMeshBatch unitShadowMeshBatch;
-        for (const auto& [_, unit] : simulation.units)
+        for (const auto& [unitId, unit] : simulation.units)
         {
+            if (!unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
+            {
+                continue;
+            }
             const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
             const auto& modelDefinition = simulation.unitModelDefinitions.at(unitDefinition.objectName);
 
@@ -781,8 +789,13 @@ namespace rwe
         sceneContext.graphics->enableDepthBuffer();
 
         UnitMeshBatch unitMeshBatch;
-        for (const auto& [_, unit] : simulation.units)
+        for (const auto& [unitId, unit] : simulation.units)
         {
+            // Hide enemy units not in line of sight
+            if (!unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
+            {
+                continue;
+            }
             const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
             const auto& unitModelDefinition = simulation.unitModelDefinitions.at(unitDefinition.objectName);
             drawUnit(gameMediaDatabase, viewProjectionMatrix, unit, unitDefinition, unitModelDefinition, getPlayer(unit.owner).color, interpolationFraction, unitTextureAtlas.get(), unitTeamTextureAtlases, unitMeshBatch);
