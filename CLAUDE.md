@@ -4,76 +4,84 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Robot War Engine (RWE) is an open-source real-time strategy game engine with high compatibility for Total Annihilation data files. It consists of a C++17 core engine and a TypeScript/Electron launcher application. Active priority is simplifying dependencies and improving new developer onboarding.
+Annihilation Engine is a cross-platform, open-source game engine for Total Annihilation, forked from Robot War Engine (RWE) by MHeasell. Focused on faithful TA recreation with TA Escalation mod support and macOS ARM compatibility.
 
 ## Build Commands
 
-### C++ Engine (from repo root)
+### Quick Build (any platform)
 
 ```bash
-# First time setup (submodules + protobuf)
-git submodule update --init --recursive
-cd libs && ./build-protobuf.sh && cd ..
-
-# Build (Linux/macOS)
-mkdir build && cd build
-cmake .. -G 'Unix Makefiles' -DCMAKE_BUILD_TYPE=Debug
-make -j$(nproc)
-
-# Run unit tests
-./build/rwe_test
-
-# Run a single test by name (Catch2 syntax)
-./build/rwe_test "test name pattern"
-./build/rwe_test "[tag]"
+# Use the platform-specific build script
+scripts/build-macos.sh [Debug|Release]   # macOS
+scripts/build-linux.sh [Debug|Release]   # Linux
+scripts/build-windows.sh [Debug|Release] # Windows (MSYS2 MinGW64)
 ```
 
-### Launcher (from `launcher/` directory)
+### Manual Build (macOS)
 
 ```bash
-npm ci
-npm run tsc          # Type check
-npm test             # Jest tests
-npm run lint         # ESLint
-npm run server       # Webpack dev server (hot reload)
-npm start            # Launch Electron app (needs RWE_HOME env var)
-npm run master-server # Local multiplayer master server
-npm run package      # Package for distribution
+# First time setup
+git submodule update --init --recursive --depth 1
+cd libs && ./build-protobuf.sh && cd ..
+
+# Build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(sysctl -n hw.ncpu)
+
+# Test
+./build/rwe_test
+
+# Run
+./build/AnnihilationEngine --data-path /path/to/ta/data
+```
+
+### Manual Build (Linux)
+
+```bash
+sudo apt-get install gcc g++ cmake libglew-dev zlib1g-dev libpng-dev \
+  libasound2-dev libpulse-dev libpipewire-0.3-dev libwayland-dev \
+  wayland-protocols libxkbcommon-dev libdecor-0-dev autoconf automake libtool
+
+git submodule update --init --recursive --depth 1
+cd libs && ./build-protobuf.sh && cd ..
+
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
 ```
 
 ## Architecture
 
 ### Core Engine (`src/rwe/`)
 
-The engine is built as a static library `librwe` linked by multiple executables (`rwe`, `rwe_bridge`, `rwe_test`, and various format test tools).
+Built as a static library `librwe` linked by executables (`AnnihilationEngine`, `rwe_bridge`, `rwe_test`).
 
 Key subsystems:
 
-- **sim/** - Deterministic game simulation (units, weapons, projectiles, terrain, resources). Uses fixed-point math types (`SimScalar`, `SimVector`, `SimAngle`) for cross-platform determinism.
-- **scene/** - Scene state machine: MainMenuScene → LoadingScene → GameScene.
-- **render/** - OpenGL 3.0+ rendering pipeline with GLSL shaders (in `shaders/`).
-- **cob/** - Virtual machine executing Total Annihilation's COB unit behavior scripts. CobThread runs concurrent script coroutines within CobExecutionContext.
-- **io/** - Parsers for TA file formats: HPI (archives), GAF (sprites), TDF (config), 3DO (models), COB (scripts), FBI (units), TNT (terrain), PCX (images), OTA (maps), GUI (layouts).
-- **vfs/** - Virtual file system abstracting over HPI archives and directories.
-- **pathfinding/** - A* pathfinding with octile distance on grids.
-- **proto/** - Protocol buffer networking (defined in `proto/network.proto`).
-- **geometry/** / **math/** - Linear algebra and spatial primitives.
-- **collections/** - Custom data structures (MinHeap, VectorMap).
+- **sim/** - Deterministic game simulation (units, weapons, projectiles, terrain, resources). Uses SimScalar/SimVector/SimAngle types.
+- **scene/** - Scene state machine: MainMenuScene -> LoadingScene -> GameScene.
+- **render/** - OpenGL 3.2+ rendering with GLSL 150 shaders (in `shaders/`).
+- **cob/** - COB virtual machine for TA unit behavior scripts.
+- **io/** - Parsers for TA formats: HPI, GAF, TDF, 3DO, COB, FBI, TNT, PCX, OTA, GUI.
+- **vfs/** - Virtual file system over HPI archives and directories.
+- **pathfinding/** - A* pathfinding on grids.
 
-### Launcher (`launcher/src/`)
+### Dependencies
 
-Electron app with React/Redux for the multiplayer lobby. Communicates with the engine via `rwe_bridge` (JSON IPC). Contains `launcher/`, `master-server/`, `game-server/`, and `common/` modules.
+- **SDL3** - Vendored submodule (static linked), no system SDL needed
+- **SDL3_mixer** - Vendored submodule (track-based audio)
+- **Standalone Asio** - Vendored submodule (networking, no Boost)
+- **ImGui v1.92** - SDL3 backend
+- **Protobuf** - Built from source via `libs/build-protobuf.sh`
+- **GLEW, zlib, libpng** - System packages
 
 ## Code Conventions
 
-- All C++ code is in the `rwe::` namespace
-- Formatting enforced by `.clang-format`: Allman brace style, 4-space indent, no column limit, C++17 standard
-- Test files live alongside source: `src/rwe/[subsystem]/[Component].test.cpp`
-- Strong typing via opaque ID types: `UnitId`, `PlayerId`, `ProjectileId` (see `OpaqueId`)
-- Variant-based state machines for unit behavior and navigation goals
-- Error handling uses `Result<T, E>` types rather than exceptions
-- Version derived from git tags (format: `v#.#.#`)
+- All C++ code in `rwe::` namespace
+- `.clang-format`: Allman brace style, 4-space indent, C++20
+- Strong typing via opaque IDs: `UnitId`, `PlayerId`, `ProjectileId`
+- Variant-based state machines for unit behavior
+- Error handling uses `Result<T, E>` types
 
 ## CI
 
-GitHub Actions runs Linux (gcc-12, clang-15) and Windows (MSVC 2022, MinGW64) builds in both Debug and Release configurations.
+GitHub Actions: Linux (gcc-14, clang-18), macOS (ARM), Windows (MSVC 2026, MinGW64).
