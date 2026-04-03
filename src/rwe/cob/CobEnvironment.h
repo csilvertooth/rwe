@@ -112,7 +112,11 @@ namespace rwe
             {
                 CobSfxType sfxType;
             };
-            using CommandType = std::variant<Move, Turn, Spin, StopSpin, Show, Hide, EnableShading, DisableShading, EmitSfx>;
+            struct Explode
+            {
+                int explosionType;
+            };
+            using CommandType = std::variant<Move, Turn, Spin, StopSpin, Show, Hide, EnableShading, DisableShading, EmitSfx, Explode>;
 
             unsigned int piece;
             CommandType command;

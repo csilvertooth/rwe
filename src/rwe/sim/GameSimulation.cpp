@@ -824,6 +824,8 @@ namespace rwe
 
     void GameSimulation::setBuggerOff(UnitId unitId, bool value)
     {
+        auto& unit = getUnitState(unitId);
+        unit.buggerOff = value;
         if (value)
         {
             emitBuggerOff(unitId);

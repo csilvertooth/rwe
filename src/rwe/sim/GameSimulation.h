@@ -170,6 +170,14 @@ namespace rwe
         std::string pieceName;
     };
 
+    struct PieceExplodeEvent
+    {
+        UnitId unitId;
+        std::string pieceName;
+        SimVector position;
+        int explosionType;
+    };
+
     struct ProjectileSpawnedEvent
     {
         ProjectileId projectileId;
@@ -198,6 +206,7 @@ namespace rwe
         UnitDeactivatedEvent,
         UnitCompleteEvent,
         EmitParticleFromPieceEvent,
+        PieceExplodeEvent,
         UnitSpawnedEvent,
         UnitDiedEvent,
         UnitStartedBuildingEvent,

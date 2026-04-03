@@ -252,6 +252,15 @@ namespace rwe
         bool activated{false};
         bool isSufficientlyPowered{false};
 
+        bool armored{false};
+        bool busy{false};
+        bool buggerOff{false};
+        unsigned int veteranLevel{0};
+        unsigned int killCount{0};
+
+        UnitFireOrders standingFireOrders{UnitFireOrders::FireAtWill};
+        int standingMoveOrders{1}; // 0=hold pos, 1=maneuver, 2=roam
+
         Energy energyProductionBuffer{0};
         Metal metalProductionBuffer{0};
         Energy previousEnergyConsumptionBuffer{0};

@@ -2737,6 +2737,12 @@ namespace rwe
                             throw std::logic_error("unknown particle type");
                     }
                 },
+                [&](const PieceExplodeEvent& e) {
+                    // Spawn debris particle at the piece's world position
+                    // The explosion type flags determine what kind of debris effect to use
+                    // For now, emit a smoke/explosion effect at the piece position
+                    emitLightSmokeFromPiece(e.unitId, e.pieceName);
+                },
                 [&](const UnitSpawnedEvent& e) {
                     // initialise local-player-specific UI data
                     const auto& unit = getUnit(e.unitId);

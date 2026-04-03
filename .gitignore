@@ -3,3 +3,5 @@
 
 /.idea/
 /.vs/
+build/
+.DS_Store
