@@ -1010,21 +1010,10 @@ namespace rwe
             return ProjectileCollisionInfoOutOfBounds();
         }
 
-        auto seaLevel = simulation.terrain.getSeaLevel();
-
-        // test collision with sea
-        // FIXME: waterweapons should be allowed in water
-        if (seaLevel > *terrainHeight && projectile.position.y <= seaLevel)
+        // Check unit/feature collision BEFORE terrain, so projectiles from
+        // above can hit units standing on the ground rather than hitting
+        // the terrain first.
         {
-            return ProjectileCollisionInfoSea();
-        }
-        else if (projectile.position.y <= *terrainHeight)
-        {
-            return ProjectileCollisionInfoTerrain();
-        }
-        else
-        {
-            // detect collision with something's footprint
             auto heightMapPos = simulation.terrain.worldToHeightmapCoordinate(projectile.position);
             auto cellValue = simulation.occupiedGrid.tryGet(heightMapPos);
             if (cellValue)
@@ -1044,6 +1033,19 @@ namespace rwe
                     return ProjectileCollisionInfoUnitOrFeatureOrBuilding();
                 }
             }
+        }
+
+        auto seaLevel = simulation.terrain.getSeaLevel();
+
+        // test collision with sea
+        // FIXME: waterweapons should be allowed in water
+        if (seaLevel > *terrainHeight && projectile.position.y <= seaLevel)
+        {
+            return ProjectileCollisionInfoSea();
+        }
+        else if (projectile.position.y <= *terrainHeight)
+        {
+            return ProjectileCollisionInfoTerrain();
         }
 
         return std::nullopt;

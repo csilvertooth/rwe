@@ -1162,8 +1162,8 @@ namespace rwe
 
     void GameScene::onKeyDown(const SDL_Keysym& keysym)
     {
-        // When cheat console is active, swallow all keys — ImGui handles input
-        if (cheatConsoleActive)
+        // When ImGui has keyboard focus (cheat console), let it handle all input
+        if (ImGui::GetIO().WantCaptureKeyboard)
         {
             return;
         }
@@ -1208,11 +1208,8 @@ namespace rwe
         }
         else if (keysym.sym == SDLK_RETURN || keysym.sym == SDLK_KP_ENTER)
         {
-            if (!cheatConsoleJustClosed)
-            {
-                cheatConsoleActive = true;
-                cheatConsoleText[0] = '\0';
-            }
+            cheatConsoleActive = true;
+            cheatConsoleText[0] = '\0';
         }
         else if (keysym.sym == SDLK_F10)
         {
@@ -2017,9 +2014,6 @@ namespace rwe
 
     void GameScene::renderCheatConsole()
     {
-        // Clear the just-closed flag at the start of each frame
-        cheatConsoleJustClosed = false;
-
         if (!cheatConsoleActive)
         {
             return;
@@ -2034,13 +2028,11 @@ namespace rwe
             std::string command(cheatConsoleText);
             processCheatCommand(command);
             cheatConsoleActive = false;
-            cheatConsoleJustClosed = true;
             cheatConsoleText[0] = '\0';
         }
         if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Escape)))
         {
             cheatConsoleActive = false;
-            cheatConsoleJustClosed = true;
             cheatConsoleText[0] = '\0';
         }
         ImGui::End();
