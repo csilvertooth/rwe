@@ -1012,17 +1012,39 @@ namespace rwe
 
         // Check unit/feature collision BEFORE terrain, so projectiles from
         // above can hit units standing on the ground rather than hitting
-        // the terrain first.
+        // the terrain first. Check both current and previous position cells
+        // to catch fast diagonal projectiles that skip grid cells.
         {
-            auto heightMapPos = simulation.terrain.worldToHeightmapCoordinate(projectile.position);
-            auto cellValue = simulation.occupiedGrid.tryGet(heightMapPos);
-            if (cellValue)
-            {
-                auto collides = projectileCollides(simulation, projectile, cellValue->get());
-                if (collides)
+            auto currentHeightMapPos = simulation.terrain.worldToHeightmapCoordinate(projectile.position);
+            auto previousHeightMapPos = simulation.terrain.worldToHeightmapCoordinate(projectile.previousPosition);
+
+            auto checkCell = [&](const Point& pos) -> bool {
+                auto cellValue = simulation.occupiedGrid.tryGet(pos);
+                if (cellValue)
                 {
-                    return ProjectileCollisionInfoUnitOrFeatureOrBuilding();
+                    if (projectileCollides(simulation, projectile, cellValue->get()))
+                    {
+                        return true;
+                    }
                 }
+                return false;
+            };
+
+            if (checkCell(currentHeightMapPos))
+            {
+                return ProjectileCollisionInfoUnitOrFeatureOrBuilding();
+            }
+            if (previousHeightMapPos != currentHeightMapPos && checkCell(previousHeightMapPos))
+            {
+                return ProjectileCollisionInfoUnitOrFeatureOrBuilding();
+            }
+
+            // Also check cells in between for fast projectiles
+            auto midPos = simulation.terrain.worldToHeightmapCoordinate(
+                (projectile.position + projectile.previousPosition) * SimScalar(0.5f));
+            if (midPos != currentHeightMapPos && midPos != previousHeightMapPos && checkCell(midPos))
+            {
+                return ProjectileCollisionInfoUnitOrFeatureOrBuilding();
             }
 
             // detect collision with flying unit footprint
