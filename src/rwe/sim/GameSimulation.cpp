@@ -1171,8 +1171,20 @@ namespace rwe
 
     void GameSimulation::killUnit(UnitId unitId)
     {
-        auto& unit = getUnitState(unitId);
-        const auto& unitDefinition = unitDefinitions.at(unit.unitType);
+        auto unitOpt = tryGetUnitState(unitId);
+        if (!unitOpt || unitOpt->get().isDead())
+        {
+            return;
+        }
+        auto& unit = unitOpt->get();
+
+        auto unitDefIt = unitDefinitions.find(unit.unitType);
+        if (unitDefIt == unitDefinitions.end())
+        {
+            unit.markAsDead();
+            return;
+        }
+        const auto& unitDefinition = unitDefIt->second;
 
         unit.markAsDead();
 
@@ -1190,7 +1202,18 @@ namespace rwe
 
     void GameSimulation::applyDamage(UnitId unitId, unsigned int damagePoints, std::optional<UnitId> sourceUnit, bool paralyzer)
     {
-        auto& unit = getUnitState(unitId);
+        auto unitOpt = tryGetUnitState(unitId);
+        if (!unitOpt)
+        {
+            return;
+        }
+        auto& unit = unitOpt->get();
+
+        // Skip already dead units (can happen during cascade explosions)
+        if (unit.isDead())
+        {
+            return;
+        }
 
         if (paralyzer)
         {
@@ -1348,7 +1371,13 @@ namespace rwe
             const auto& id = projectileEntry.first;
             auto& projectile = projectileEntry.second;
 
-            const auto& weaponDefinition = weaponDefinitions.at(projectile.weaponType);
+            auto weaponDefIt = weaponDefinitions.find(projectile.weaponType);
+            if (weaponDefIt == weaponDefinitions.end())
+            {
+                projectile.isDead = true;
+                continue;
+            }
+            const auto& weaponDefinition = weaponDefIt->second;
 
             // remove if it's time to die
             if (projectile.dieOnFrame && *projectile.dieOnFrame <= gameTime)
