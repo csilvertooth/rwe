@@ -643,7 +643,31 @@ int main(int argc, char* argv[])
     }
     catch (const std::exception& e)
     {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical Error", e.what(), nullptr);
+        // Write crash details to log file
+        std::string crashMsg = std::string("Exception: ") + e.what();
+        FILE* f = fopen("annihilation-engine-crash.log", "w");
+        if (f)
+        {
+            fprintf(f, "%s\n", crashMsg.c_str());
+
+            // Also dump a stack trace
+            void* frames[64];
+            int count = backtrace(frames, 64);
+            char** symbols = backtrace_symbols(frames, count);
+            if (symbols)
+            {
+                fprintf(f, "\nStack trace:\n");
+                for (int i = 0; i < count; ++i)
+                {
+                    fprintf(f, "%s\n", symbols[i]);
+                }
+                free(symbols);
+            }
+            fclose(f);
+        }
+
+        fprintf(stderr, "CRASH: %s\n", crashMsg.c_str());
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical Error", crashMsg.c_str(), nullptr);
         return 1;
     }
 }
