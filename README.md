@@ -52,7 +52,7 @@ with Total Annihilation data files. This fork focuses on:
 | Reclaim via right-click | Done |
 | D-Gun manual fire (D key) | Done |
 
-### Phase 3 -- 3.9.02 Patch Parity [COMPLETE]
+### Phase 3 -- 3.9.02 Patch Parity [NEEDS TESTING]
 | Feature | Status |
 |---------|--------|
 | Interceptor system (anti-missile) | Done |
