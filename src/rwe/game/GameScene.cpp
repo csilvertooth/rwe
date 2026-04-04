@@ -3521,7 +3521,12 @@ namespace rwe
     {
         for (auto& [projectileId, projectile] : simulation.projectiles)
         {
-            const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(projectile.weaponType);
+            auto weaponMediaOpt = gameMediaDatabase.tryGetWeapon(projectile.weaponType);
+            if (!weaponMediaOpt)
+            {
+                continue;
+            }
+            const auto& weaponMediaInfo = weaponMediaOpt->get();
             auto& renderInfo = projectileRenderInfos[projectileId];
 
             // emit smoke trail
@@ -3541,6 +3546,7 @@ namespace rwe
     {
         for (const auto& event : simulation.events)
         {
+            try {
             match(
                 event,
                 [&](const FireWeaponEvent& e) {
@@ -3694,6 +3700,10 @@ namespace rwe
                             break;
                     }
                 });
+            } catch (const std::exception& ex) {
+                // Skip events that reference missing definitions
+                // (can happen during mass unit death cascades)
+            }
         }
 
         simulation.events.clear();
