@@ -448,7 +448,12 @@ namespace rwe
             return;
         }
 
-        const auto& weaponDefinition = sim->weaponDefinitions.at(weapon->weaponType);
+        auto weaponDefIt = sim->weaponDefinitions.find(weapon->weaponType);
+        if (weaponDefIt == sim->weaponDefinitions.end())
+        {
+            return;
+        }
+        const auto& weaponDefinition = weaponDefIt->second;
 
         if (auto idleState = std::get_if<UnitWeaponStateIdle>(&weapon->state); idleState != nullptr)
         {
@@ -614,7 +619,12 @@ namespace rwe
             return;
         }
 
-        const auto& weaponDefinition = sim->weaponDefinitions.at(weapon->weaponType);
+        auto weaponDefIt2 = sim->weaponDefinitions.find(weapon->weaponType);
+        if (weaponDefIt2 == sim->weaponDefinitions.end())
+        {
+            return;
+        }
+        const auto& weaponDefinition = weaponDefIt2->second;
 
         auto attackInfo = std::get_if<UnitWeaponStateAttacking>(&weapon->state);
         if (!attackInfo)
@@ -1103,8 +1113,18 @@ namespace rwe
             return true;
         }
 
-        const auto& weaponDefinition = sim->weaponDefinitions.at(unitInfo.state->weapons[0]->weaponType);
-        const auto& unitDefinition = sim->unitDefinitions.at(unitInfo.state->unitType);
+        auto atkWeaponIt = sim->weaponDefinitions.find(unitInfo.state->weapons[0]->weaponType);
+        if (atkWeaponIt == sim->weaponDefinitions.end())
+        {
+            return true;
+        }
+        const auto& weaponDefinition = atkWeaponIt->second;
+        auto atkUnitDefIt = sim->unitDefinitions.find(unitInfo.state->unitType);
+        if (atkUnitDefIt == sim->unitDefinitions.end())
+        {
+            return true;
+        }
+        const auto& unitDefinition = atkUnitDefIt->second;
 
         auto targetPosition = getTargetPosition(target);
         if (!targetPosition)
