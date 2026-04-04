@@ -164,10 +164,13 @@ namespace rwe
             auto* drawList = ImGui::GetBackgroundDrawList();
             drawList->AddRectFilled(ImVec2(0, 0), ImVec2(viewportW, viewportH), IM_COL32(0, 0, 0, 160));
 
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
+            // Scale menu to viewport
+            auto scale = std::max(1.0f, viewportH / 600.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f * scale, 16.0f * scale));
 
-            auto menuW = 500.0f;
-            ImGui::SetNextWindowPos(ImVec2((viewportW - menuW) * 0.5f, viewportH * 0.1f), ImGuiCond_Always);
+            auto menuW = std::min(viewportW * 0.6f, 700.0f * scale);
+            auto menuH = std::min(viewportH * 0.75f, 600.0f * scale);
+            ImGui::SetNextWindowPos(ImVec2((viewportW - menuW) * 0.5f, (viewportH - menuH) * 0.5f), ImGuiCond_Always);
             ImGui::SetNextWindowSize(ImVec2(menuW, 0.0f), ImGuiCond_Always);
             ImGui::Begin("##MainOptions", nullptr,
                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse
@@ -188,7 +191,7 @@ namespace rwe
                 if (i > 0) ImGui::SameLine();
                 bool selected = (optionsTab == i);
                 if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.4f, 0.6f, 1.0f));
-                if (ImGui::Button(tabs[i], ImVec2(150.0f, 30.0f)))
+                if (ImGui::Button(tabs[i], ImVec2((menuW - 48.0f) / 3.0f, 30.0f * scale)))
                 {
                     optionsTab = i;
                 }
@@ -292,7 +295,7 @@ namespace rwe
             ImGui::Separator();
             ImGui::Spacing();
 
-            if (ImGui::Button("Save & Close", ImVec2(menuW - 48.0f, 36.0f)))
+            if (ImGui::Button("Save & Close", ImVec2(menuW - 32.0f * scale, 36.0f * scale)))
             {
                 cfg->save();
                 showOptionsOverlay = false;
@@ -396,21 +399,7 @@ namespace rwe
             }
             else if (message == "Options")
             {
-                if (sceneContext.rmlUi)
-                {
-                    if (!rmlOptionsDoc)
-                    {
-                        rmlOptionsDoc = sceneContext.rmlUi->loadDocument("assets/ui/options.rml");
-                    }
-                    else
-                    {
-                        rmlOptionsDoc->Show();
-                    }
-                }
-                else
-                {
-                    showOptionsOverlay = true; // fallback to ImGui
-                }
+                showOptionsOverlay = true;
             }
         }
         else if (topic == "SKIRMISH")
