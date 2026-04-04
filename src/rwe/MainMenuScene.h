@@ -10,6 +10,7 @@
 #include <rwe/io/tdf/TdfBlock.h>
 #include <rwe/scene/Scene.h>
 #include <rwe/ui/UiFactory.h>
+#include <rwe/ui/RmlUiContext.h>
 #include <rwe/ui/UiPanel.h>
 
 namespace rwe
@@ -33,6 +34,7 @@ namespace rwe
 
         bool showOptionsOverlay{false};
         int optionsTab{0}; // 0=Sound, 1=Interface, 2=Visuals
+        Rml::ElementDocument* rmlOptionsDoc{nullptr};
 
     public:
         MainMenuScene(

@@ -305,6 +305,16 @@ namespace rwe
 
     void MainMenuScene::onKeyDown(const SDL_KeyboardEvent& keysym)
     {
+        // Close RmlUi options if open
+        if (rmlOptionsDoc && rmlOptionsDoc->IsVisible())
+        {
+            if (keysym.key == SDLK_ESCAPE)
+            {
+                rmlOptionsDoc->Hide();
+                return;
+            }
+        }
+
         topPanel().keyDown(KeyEvent(keysym.key));
     }
 
@@ -381,7 +391,21 @@ namespace rwe
             }
             else if (message == "Options")
             {
-                showOptionsOverlay = true;
+                if (sceneContext.rmlUi)
+                {
+                    if (!rmlOptionsDoc)
+                    {
+                        rmlOptionsDoc = sceneContext.rmlUi->loadDocument("assets/ui/options.rml");
+                    }
+                    else
+                    {
+                        rmlOptionsDoc->Show();
+                    }
+                }
+                else
+                {
+                    showOptionsOverlay = true; // fallback to ImGui
+                }
             }
         }
         else if (topic == "SKIRMISH")
