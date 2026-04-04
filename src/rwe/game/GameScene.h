@@ -292,6 +292,9 @@ namespace rwe
         bool gamePaused{false};
         bool gameOver{false};
         std::string gameOverMessage;
+
+        bool megamapActive{false};
+        GameCameraState savedCameraState;
         float gameSpeed{1.0f};
 
         bool cheatConsoleActive{false};

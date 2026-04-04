@@ -1848,6 +1848,37 @@ namespace rwe
         {
             startTrack();
         }
+        else if (keysym.key == SDLK_F1 || keysym.key == SDLK_TAB)
+        {
+            // F1/Tab = MegaMap strategic overlay toggle
+            megamapActive = !megamapActive;
+            if (megamapActive)
+            {
+                // Save current camera and zoom out to show entire map
+                savedCameraState = worldCameraState;
+                auto terrainLeft = simScalarToFloat(simulation.terrain.leftInWorldUnits());
+                auto terrainRight = simScalarToFloat(simulation.terrain.rightCutoffInWorldUnits());
+                auto terrainTop = simScalarToFloat(simulation.terrain.topInWorldUnits());
+                auto terrainBottom = simScalarToFloat(simulation.terrain.bottomCutoffInWorldUnits());
+                auto terrainW = terrainRight - terrainLeft;
+                auto terrainH = terrainBottom - terrainTop;
+                auto centerX = (terrainLeft + terrainRight) * 0.5f;
+                auto centerZ = (terrainTop + terrainBottom) * 0.5f;
+
+                // Calculate zoom to fit entire map in viewport
+                auto viewW = static_cast<float>(worldViewport.width());
+                auto viewH = static_cast<float>(worldViewport.height());
+                auto zoomX = viewW / terrainW;
+                auto zoomY = viewH / terrainH;
+                worldCameraState.zoom = std::min(zoomX, zoomY) * 0.95f; // 5% margin
+                worldCameraState.position = Vector3f(centerX, 0.0f, centerZ);
+            }
+            else
+            {
+                // Restore saved camera
+                worldCameraState = savedCameraState;
+            }
+        }
         else if (keysym.key == SDLK_F2)
         {
             // F2 = Options menu (TA standard)
@@ -2515,6 +2546,21 @@ namespace rwe
 
     void GameScene::onMouseWheel(MouseWheelEvent event)
     {
+        if (megamapActive)
+        {
+            // Scroll wheel zooms in/out on megamap
+            auto zoomFactor = event.y > 0 ? 1.15f : 0.87f;
+            worldCameraState.zoom *= zoomFactor;
+            worldCameraState.zoom = std::clamp(worldCameraState.zoom, 0.05f, 2.0f);
+
+            // If zoomed back to normal view range, exit megamap
+            if (worldCameraState.zoom >= 1.0f)
+            {
+                megamapActive = false;
+                worldCameraState = savedCameraState;
+            }
+            return;
+        }
         currentPanel->mouseWheel(event);
     }
 
@@ -2524,7 +2570,8 @@ namespace rwe
 
         auto cameraConstraint = computeCameraConstraint(simulation.terrain, worldCameraState.scaleDimension(worldViewport.width()), worldCameraState.scaleDimension(worldViewport.height()));
 
-        // update camera position from keyboard arrows
+        // update camera position from keyboard arrows (disabled during megamap)
+        if (!megamapActive)
         {
             int directionX = (right ? 1 : 0) - (left ? 1 : 0);
             int directionZ = (down ? 1 : 0) - (up ? 1 : 0);
@@ -2535,7 +2582,8 @@ namespace rwe
             }
         }
 
-        // update camera position from edge scroll
+        // update camera position from edge scroll (disabled during megamap)
+        if (!megamapActive)
         {
             auto mousePosition = getMousePosition();
             auto directionX = mousePosition.x == sceneContext.viewport->left()
