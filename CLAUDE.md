@@ -53,17 +53,32 @@ cmake --build build -j$(nproc)
 
 ### Core Engine (`src/rwe/`)
 
-Built as a static library `librwe` linked by executables (`AnnihilationEngine`, `rwe_bridge`, `rwe_test`).
+Built as a static library `librwe` linked by executables (`AnnihilationEngine`, `rwe_bridge`, `rwe_test`). The source is organized into 5 logical sub-libraries (defined as separate CMake file lists that compose into `librwe`):
 
-Key subsystems:
+**UTIL_FILES** — Shared foundations:
+- **util/** - Logging (`SimpleLogger`), string ops, safe lookups, `match()`, opaque IDs, `Result<T,E>`
+- **math/** - Vector/Matrix types, trigonometry
+- **geometry/** - Bounding boxes, rays, planes, triangles, rectangles
+- **grid/** - 2D grid, discrete rects, directions
+- **collections/** - `VectorMap`, `SimpleVectorMap`, `MinHeap`
 
-- **sim/** - Deterministic game simulation (units, weapons, projectiles, terrain, resources). Uses SimScalar/SimVector/SimAngle types.
-- **scene/** - Scene state machine: MainMenuScene -> LoadingScene -> GameScene.
-- **render/** - OpenGL 3.2+ rendering with GLSL 150 shaders (in `shaders/`).
-- **cob/** - COB virtual machine for TA unit behavior scripts.
-- **io/** - Parsers for TA formats: HPI, GAF, TDF, 3DO, COB, FBI, TNT, PCX, OTA, GUI.
-- **vfs/** - Virtual file system over HPI archives and directories.
-- **pathfinding/** - A* pathfinding on grids.
+**IO_FILES** — File format parsers (no sim/render dependencies):
+- **io/** - Parsers for TA formats: HPI, GAF, TDF, 3DO, COB, FBI, TNT, PCX, OTA, GUI
+- **vfs/** - Virtual file system over HPI archives and directories
+
+**SIM_FILES** — Deterministic game simulation (no render dependencies):
+- **sim/** - Units, weapons, projectiles, terrain, resources. Uses `SimScalar`/`SimVector`/`SimAngle` types
+- **cob/** - COB virtual machine for TA unit behavior scripts
+- **pathfinding/** - A* pathfinding on grids
+
+**RENDER_FILES** — OpenGL rendering:
+- **render/** - OpenGL 3.2+ rendering with GLSL 150 shaders (in `shaders/`)
+
+**GAME_FILES** — Integration layer (depends on all above):
+- **game/** - Game scenes, network service, player commands, media databases
+- **scene/** - Scene state machine: MainMenuScene -> LoadingScene -> GameScene
+- **ui/** - UI components and panels
+- **sdl/** - SDL3 context management
 
 ### Dependencies
 
@@ -79,8 +94,11 @@ Key subsystems:
 - All C++ code in `rwe::` namespace
 - `.clang-format`: Allman brace style, 4-space indent, C++20
 - Strong typing via opaque IDs: `UnitId`, `PlayerId`, `ProjectileId`
-- Variant-based state machines for unit behavior
-- Error handling uses `Result<T, E>` types
+- Variant-based state machines for unit behavior; use `match()` from `util/match.h`
+- Error handling: exceptions at init/loading, `LOG_ERROR` + graceful degradation at runtime (never crash in gameplay code). See `util/safe_lookup.h`
+- Logging via `SimpleLogger` macros: `LOG_DEBUG`, `LOG_INFO`, `LOG_WARN`, `LOG_ERROR`, `LOG_CRITICAL`
+- Platform-specific code behind `RWE_PLATFORM_WINDOWS`, `RWE_PLATFORM_APPLE`, `RWE_PLATFORM_LINUX` guards
+- Use `target_compile_definitions()` (not `add_definitions()`) in CMake
 
 ## CI
 

@@ -117,15 +117,26 @@ This codebase was forked from Robot War Engine (RWE). A thorough audit revealed 
 
 ---
 
-## Phase 10: Library Modularization — NOT STARTED (deferred)
+## Phase 10: Library Modularization — COMPLETED
 
-The current monolithic `librwe` (393-line file list) could be split into:
-- `librwe_sim` — Deterministic simulation (no rendering deps)
-- `librwe_io` — File format parsers
-- `librwe_render` — OpenGL rendering
-- `librwe_net` — Network services
+**Changes made:**
+Split the monolithic 393-file `SOURCE_FILES` list into 5 categorized groups in `CMakeLists.txt`:
+- `UTIL_FILES` — Shared utilities, math, geometry, grid, collections (~80 files)
+- `IO_FILES` — File format parsers (HPI, GAF, TDF, 3DO, etc.) + VFS (~55 files)
+- `SIM_FILES` — Deterministic simulation, COB VM, pathfinding (~95 files)
+- `RENDER_FILES` — OpenGL rendering, shaders, sprites (~25 files)
+- `GAME_FILES` — Integration layer (scenes, services, UI, SDL, network) (~100 files)
 
-**Note:** This is a large refactor requiring careful dependency analysis. Recommend tackling after remaining Phase 8 tests provide a safety net.
+All groups compose into the unified `librwe` static library via `set(SOURCE_FILES ${UTIL_FILES} ${IO_FILES} ${SIM_FILES} ${RENDER_FILES} ${GAME_FILES})`.
+
+**Dependency cleanup:**
+- Removed dead cross-module includes (`MapTerrain`→`TextureRegion`, `GraphicsContext`→`MapFeature`/`MapTerrain`)
+- Added missing direct includes exposed by removing transitive deps (`Rectangle2x.h`, `rwe_math.h`, `Grid.h`)
+- Moved `PlayerColorIndex` from `game/` to `sim/` (eliminated sim→game dependency)
+
+**Remaining work:**
+- UnitBehaviorService + GameNetworkService tests (Phase 8 continuation)
+- Incremental `.at()` → graceful error handling in remaining hot paths
 
 ---
 

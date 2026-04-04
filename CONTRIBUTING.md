@@ -42,19 +42,29 @@ cmake --build build -j$(sysctl -n hw.ncpu)  # macOS
 
 ## Architecture Overview
 
-The engine is built as a static library `librwe` linked by executables.
+The engine is built as a static library `librwe` linked by executables. The source is organized into 5 logical sub-libraries (CMake file lists) with a clear dependency hierarchy:
 
-| Subsystem | Path | Description |
-|-----------|------|-------------|
-| **sim/** | `src/rwe/sim/` | Deterministic game simulation (units, weapons, projectiles, terrain, resources). Uses `SimScalar`/`SimVector`/`SimAngle` types for reproducibility. |
-| **game/** | `src/rwe/game/` | Game scenes, rendering orchestration, network service, player commands |
-| **render/** | `src/rwe/render/` | OpenGL 3.2+ rendering with GLSL 150 shaders |
-| **cob/** | `src/rwe/cob/` | COB virtual machine for TA unit behavior scripts |
-| **io/** | `src/rwe/io/` | Parsers for TA file formats: HPI, GAF, TDF, 3DO, COB, FBI, TNT, PCX, OTA, GUI |
-| **vfs/** | `src/rwe/vfs/` | Virtual file system over HPI archives and directories |
-| **pathfinding/** | `src/rwe/pathfinding/` | A* pathfinding on grids |
-| **ui/** | `src/rwe/ui/` | UI components and panels |
-| **util/** | `src/rwe/util/` | Shared utilities (logging, string ops, safe lookups, match/overloaded, opaque IDs) |
+```
+UTIL_FILES (foundations — no engine deps)
+    ↑
+IO_FILES (file parsers — depends on util only)
+    ↑
+SIM_FILES (simulation — depends on util only, no render deps)
+    ↑
+RENDER_FILES (OpenGL — depends on util, grid)
+    ↑
+GAME_FILES (integration — depends on all above)
+```
+
+### Sub-library Details
+
+| Sub-library | Subsystems | Description |
+|-------------|-----------|-------------|
+| **UTIL_FILES** | `util/`, `math/`, `geometry/`, `grid/`, `collections/` | Shared foundations: logging, math, data structures, opaque IDs |
+| **IO_FILES** | `io/`, `vfs/` | File format parsers (HPI, GAF, TDF, 3DO, etc.) and virtual file system |
+| **SIM_FILES** | `sim/`, `cob/`, `pathfinding/` | Deterministic simulation, COB VM, A* pathfinding. Uses `SimScalar`/`SimVector`/`SimAngle` types. No rendering dependencies. |
+| **RENDER_FILES** | `render/` | OpenGL 3.2+ rendering with GLSL 150 shaders |
+| **GAME_FILES** | `game/`, `scene/`, `ui/`, `sdl/`, `proto/` | Integration layer: game scenes, network, player commands, UI, SDL context |
 
 ## Code Conventions
 
