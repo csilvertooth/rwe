@@ -710,6 +710,12 @@ namespace rwe
             direction = changeDirectionByRandomAngle(direction, weaponDefinition.sprayAngle);
         }
 
+        // Accuracy modifier — adds random deviation to aim (higher value = less accurate)
+        if (weaponDefinition.accuracy > 0)
+        {
+            direction = changeDirectionByRandomAngle(direction, SimAngle(weaponDefinition.accuracy));
+        }
+
         // Check energy/metal cost per shot (D-Gun and other expensive weapons)
         if (weaponDefinition.energyPerShot.value > 0 || weaponDefinition.metalPerShot.value > 0)
         {

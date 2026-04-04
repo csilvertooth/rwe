@@ -282,6 +282,9 @@ namespace rwe
         /** Heightmap position where radar was last computed. */
         Point lastRadarPosition{-1, -1};
 
+        /** If true, unit is currently cloaked (invisible to enemies outside minCloakDistance). */
+        bool cloaked{false};
+
         /** Accumulated paralyzer/EMP damage. Unit is stunned when this exceeds maxHitPoints. */
         unsigned int stunDamage{0};
         /** If true, unit is currently paralyzed and cannot act. */

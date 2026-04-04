@@ -2039,6 +2039,33 @@ namespace rwe
             return true;
         }
 
+        // Cloaked units are invisible unless an enemy unit is within minCloakDistance
+        if (targetUnit.cloaked)
+        {
+            auto targetDefIt = unitDefinitions.find(targetUnit.unitType);
+            auto minDist = (targetDefIt != unitDefinitions.end()) ? SimScalar(targetDefIt->second.minCloakDistance) : 50_ss;
+            if (minDist <= 0_ss) minDist = 50_ss;
+            auto minDistSq = minDist * minDist;
+
+            bool enemyNearby = false;
+            for (const auto& [_, viewerUnit] : units)
+            {
+                if (!viewerUnit.isOwnedBy(viewer) || viewerUnit.isDead())
+                {
+                    continue;
+                }
+                if (viewerUnit.position.distanceSquared(targetUnit.position) <= minDistSq)
+                {
+                    enemyNearby = true;
+                    break;
+                }
+            }
+            if (!enemyNearby)
+            {
+                return false;
+            }
+        }
+
         if (viewer.value >= fogOfWar.size())
         {
             return true; // no fog data, assume visible
