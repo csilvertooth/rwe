@@ -747,6 +747,65 @@ namespace rwe
         pushLine(batch.lines, start, end, Vector3f(0.0f, 1.0f, 0.0f));
     }
 
+    void drawNanoParticles(const Vector3f& start, const Vector3f& end, GameTime gameTime, const Vector3f& color, ColoredMeshBatch& batch)
+    {
+        auto direction = end - start;
+        auto length = direction.length();
+        if (length < 0.01f)
+        {
+            return;
+        }
+        auto dirXZ = Vector3f(direction.x, 0.0f, direction.z);
+        auto dirXZLen = dirXZ.length();
+        if (dirXZLen < 0.001f)
+        {
+            dirXZ = Vector3f(1.0f, 0.0f, 0.0f);
+            dirXZLen = 1.0f;
+        }
+        dirXZ = dirXZ * (1.0f / dirXZLen);
+
+        // Perpendicular in XZ plane (visible from top-down camera)
+        auto perp = Vector3f(-dirXZ.z, 0.0f, dirXZ.x);
+
+        // Stream particles along the path
+        auto numParticles = static_cast<int>(length / 6.0f);
+        numParticles = std::clamp(numParticles, 4, 20);
+
+        auto timeVal = static_cast<float>(gameTime.value);
+        auto brightColor = color;
+        auto dimColor = color * 0.5f;
+
+        for (int i = 0; i < numParticles; ++i)
+        {
+            auto phase = static_cast<float>(i) / static_cast<float>(numParticles);
+            auto t = std::fmod(phase + timeVal * 0.06f, 1.0f);
+
+            auto pos = start + direction * t;
+
+            // Waviness in the XZ plane (visible from above)
+            auto wave = std::sin(t * 10.0f + timeVal * 0.25f + static_cast<float>(i) * 2.1f);
+            pos = pos + perp * (wave * 3.0f);
+
+            // Particles grow from small at source to larger at destination
+            auto sizeVar = std::sin(static_cast<float>(i) * 3.7f + timeVal * 0.1f) * 0.4f + 0.6f;
+            auto size = (1.0f + t * 3.0f) * sizeVar;
+            auto particleColor = (t < 0.4f) ? brightColor : dimColor;
+
+            // Flat quad in XZ plane (visible from top-down camera)
+            auto a = pos + perp * size + dirXZ * size;
+            auto b = pos - perp * size + dirXZ * size;
+            auto c = pos - perp * size - dirXZ * size;
+            auto d = pos + perp * size - dirXZ * size;
+            // Raise slightly above ground
+            a.y += 2.0f; b.y += 2.0f; c.y += 2.0f; d.y += 2.0f;
+
+            pushTriangle(batch.triangles, a, b, c, particleColor);
+            pushTriangle(batch.triangles, a, c, d, particleColor);
+        }
+
+        // No core line — particles only
+    }
+
     void drawWakeParticle(const GameMediaDatabase& gameMediaDatabase, GameTime currentTime, const Matrix4f& viewProjectionMatrix, const Particle& particle, ColoredMeshBatch& batch)
     {
         auto wakeRenderInfo = std::get_if<ParticleRenderTypeWake>(&particle.renderType);

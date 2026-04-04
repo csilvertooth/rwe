@@ -296,7 +296,12 @@ namespace rwe
 
     void UiRenderService::drawLine(const Vector2f& start, const Vector2f& end)
     {
-        auto floatColor = Vector3f(1.0f, 1.0f, 1.0f);
+        drawLine(start, end, Color(255, 255, 255));
+    }
+
+    void UiRenderService::drawLine(const Vector2f& start, const Vector2f& end, Color color)
+    {
+        auto floatColor = Vector3f(color.r, color.g, color.b) / 255.0f;
         std::vector<GlColoredVertex> vertices{
             {{start.x, start.y, 0.0f}, floatColor},
             {{end.x, end.y, 0.0f}, floatColor},
@@ -307,7 +312,7 @@ namespace rwe
         const auto& shader = shaders->basicColor;
         graphics->bindShader(shader.handle.get());
         graphics->setUniformMatrix(shader.mvpMatrix, getViewProjectionMatrix() * matrixStack.top());
-        graphics->setUniformFloat(shader.alpha, 1.0f);
+        graphics->setUniformFloat(shader.alpha, static_cast<float>(color.a) / 255.0f);
         graphics->drawLines(mesh);
     }
 

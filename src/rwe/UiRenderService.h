@@ -79,6 +79,7 @@ namespace rwe
         void drawBoxOutline(float x, float y, float width, float height, Color color, float thickness);
 
         void drawLine(const Vector2f& start, const Vector2f& end);
+        void drawLine(const Vector2f& start, const Vector2f& end, Color color);
 
         Matrix4f getViewProjectionMatrix() const;
 

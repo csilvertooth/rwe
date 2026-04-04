@@ -1129,7 +1129,16 @@ namespace rwe
             }
             else
             {
-                // we're in range, aim weapons
+                // Gunships: drift slowly around the target while attacking
+                if (unitDefinition.canFly && unitDefinition.hoverAttack)
+                {
+                    auto driftPhase = sin(SimAngle(sim->gameTime.value * 30));
+                    auto driftPerp = SimVector(cos(unitInfo.state->rotation), 0_ss, -sin(unitInfo.state->rotation));
+                    auto driftPos = *targetPosition + driftPerp * driftPhase * 40_ss;
+                    navigateTo(unitInfo, driftPos);
+                }
+
+                // Aim weapons
                 for (unsigned int i = 0; i < 2; ++i)
                 {
                     match(
@@ -1628,6 +1637,7 @@ namespace rwe
                 if (!unitInfo.state->inBuildStance)
                 {
                     // We are not in the correct stance to build the unit yet, wait.
+                    buildingState.nanoParticleOrigin = std::nullopt;
                     return false;
                 }
 

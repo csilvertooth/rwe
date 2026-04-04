@@ -654,6 +654,13 @@ namespace rwe
 
     void GameScene::renderBuildBoxes(const UnitState& unit, const Color& color, const Matrix4f& worldToUi)
     {
+        std::optional<Vector2f> prevCenter;
+        int buildIndex = 1;
+        auto timeMs = sceneContext.timeService->getTicks();
+        auto pulse = 0.5f + 0.5f * std::sin(static_cast<float>(timeMs) * 0.008f);
+        auto brightness = static_cast<uint8_t>(120 + static_cast<int>(pulse * 135.0f));
+        auto lineAlpha = static_cast<uint8_t>(140 + static_cast<int>(pulse * 115.0f));
+
         for (const auto& order : unit.orders)
         {
             if (const auto buildOrder = std::get_if<BuildOrder>(&order))
@@ -668,13 +675,28 @@ namespace rwe
                     topLeftWorld.z + ((SimScalar(footprintRect.height) * MapTerrain::HeightTileHeightInWorldUnits) / 2_ss));
 
                 auto topLeftUi = worldToUi * simVectorToFloat(topLeftWorld);
+                auto boxW = footprintRect.width * simScalarToFloat(MapTerrain::HeightTileWidthInWorldUnits);
+                auto boxH = footprintRect.height * simScalarToFloat(MapTerrain::HeightTileHeightInWorldUnits);
+
                 worldUiRenderService.drawBoxOutline(
-                    topLeftUi.x,
-                    topLeftUi.y,
-                    footprintRect.width * simScalarToFloat(MapTerrain::HeightTileWidthInWorldUnits),
-                    footprintRect.height * simScalarToFloat(MapTerrain::HeightTileHeightInWorldUnits),
-                    color,
-                    2.0f);
+                    topLeftUi.x, topLeftUi.y, boxW, boxH, color, 2.0f);
+
+                // Center of this build box in UI space
+                auto center = Vector2f(topLeftUi.x + boxW * 0.5f, topLeftUi.y + boxH * 0.5f);
+
+                // Draw order number
+                worldUiRenderService.drawText(
+                    center.x - 3.0f, center.y - 4.0f,
+                    std::to_string(buildIndex), *guiFont, Color(255, 255, 255, 200));
+
+                // Connect to previous build box with pulsing line
+                if (prevCenter)
+                {
+                    worldUiRenderService.drawLine(*prevCenter, center, Color(brightness, brightness, brightness, lineAlpha));
+                }
+
+                prevCenter = center;
+                ++buildIndex;
             }
         }
     }
@@ -758,7 +780,15 @@ namespace rwe
                 {
                     auto uiPos = worldToUi * simVectorToFloat(pos);
                     auto uiDest = worldToUi * simVectorToFloat(nextPos);
-                    worldUiRenderService.drawLine(uiPos.xy(), uiDest.xy());
+                    // Pulsing translucent line — vivid pulse between dim and bright
+                    auto timeMs = sceneContext.timeService->getTicks();
+                    auto pulse = 0.5f + 0.5f * std::sin(static_cast<float>(timeMs) * 0.008f);
+                    auto brightness = static_cast<uint8_t>(120 + static_cast<int>(pulse * 135.0f));
+                    auto alpha = static_cast<uint8_t>(140 + static_cast<int>(pulse * 115.0f));
+                    worldUiRenderService.drawLine(uiPos.xy(), uiDest.xy(), Color(brightness, brightness, brightness, alpha));
+                    // Draw a second pass slightly offset for width
+                    auto offset = Vector2f(0.0f, 1.0f);
+                    worldUiRenderService.drawLine(uiPos.xy() + offset, uiDest.xy() + offset, Color(brightness, brightness, brightness, static_cast<uint8_t>(alpha / 2)));
                 }
             }
 
@@ -923,7 +953,7 @@ namespace rwe
         }
         worldRenderService.drawLineLoopsBatch(selectionRectBatch);
 
-        ColoredMeshBatch nanoLinesBatch;
+        ColoredMeshBatch nanoBatch;
         for (const auto& [_, unit] : simulation.units)
         {
             if (auto nanolatheTarget = unit.getActiveNanolatheTarget())
@@ -931,11 +961,34 @@ namespace rwe
                 auto targetUnitOption = tryGetUnit(nanolatheTarget->first);
                 if (targetUnitOption)
                 {
-                    drawNanoLine(simVectorToFloat(nanolatheTarget->second), simVectorToFloat(targetUnitOption->get().position), nanoLinesBatch);
+                    // Only show particles if builder is close enough to actually be building
+                    auto distSq = unit.position.distanceSquared(targetUnitOption->get().position);
+                    if (distSq > SimScalar(200) * SimScalar(200))
+                    {
+                        continue;
+                    }
+                    // Race-based nanolathe color: Arm = green, Core = yellow, default = cyan
+                    auto& player = getPlayer(unit.owner);
+                    Vector3f nanoColor(0.0f, 1.0f, 0.8f); // default cyan
+                    if (player.side == "ARM" || player.side == "Arm")
+                    {
+                        nanoColor = Vector3f(0.0f, 1.0f, 0.2f); // green
+                    }
+                    else if (player.side == "CORE" || player.side == "Core")
+                    {
+                        nanoColor = Vector3f(1.0f, 0.9f, 0.0f); // yellow
+                    }
+
+                    drawNanoParticles(
+                        simVectorToFloat(nanolatheTarget->second),
+                        simVectorToFloat(targetUnitOption->get().position),
+                        simulation.gameTime,
+                        nanoColor,
+                        nanoBatch);
                 }
             }
         }
-        worldRenderService.drawBatch(nanoLinesBatch, viewProjectionMatrix);
+        worldRenderService.drawBatch(nanoBatch, viewProjectionMatrix, 0.8f);
 
         sceneContext.graphics->bindFrameBufferColorBuffer(dodgeMask.get());
         sceneContext.graphics->clearColor();
@@ -2135,10 +2188,12 @@ namespace rwe
         }
 
         hoveredUnit = getUnitUnderCursor();
-        hoveredFeature = getFeatureUnderCursor();
 
         if (auto buildCursor = std::get_if<BuildCursorMode>(&cursorMode.getValue()); buildCursor != nullptr && isCursorOverWorld())
         {
+            // Skip expensive feature hover check during build placement
+            hoveredFeature = std::nullopt;
+
             auto ray = screenToWorldRayUtil(computeInverseViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height()), screenToWorldClipSpace(getMousePosition()));
             auto intersect = simulation.intersectLineWithTerrain(floatToSimLine(ray.toLine()));
 
@@ -2159,6 +2214,7 @@ namespace rwe
         }
         else
         {
+            hoveredFeature = getFeatureUnderCursor();
             hoverBuildInfo = std::nullopt;
         }
 
