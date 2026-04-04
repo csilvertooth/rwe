@@ -1,3 +1,4 @@
+#include <GL/glew.h>
 #include "RmlUiContext.h"
 #include <RmlUi/Core.h>
 #include <rwe/util/SimpleLogger.h>
@@ -123,9 +124,30 @@ namespace rwe
     void RmlUiContext::render()
     {
         if (!context) return;
+
+        // Save GL state that the game uses
+        GLint prevFramebuffer;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFramebuffer);
+        GLboolean prevDepthTest = glIsEnabled(GL_DEPTH_TEST);
+        GLboolean prevCullFace = glIsEnabled(GL_CULL_FACE);
+        GLboolean prevBlend = glIsEnabled(GL_BLEND);
+
+        // RmlUi needs default framebuffer and specific GL state
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
         renderInterface->BeginFrame();
         context->Render();
         renderInterface->EndFrame();
+
+        // Restore GL state
+        glBindFramebuffer(GL_FRAMEBUFFER, prevFramebuffer);
+        if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+        if (prevCullFace) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+        if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
     }
 
     bool RmlUiContext::processEvent(SDL_Event& event)
