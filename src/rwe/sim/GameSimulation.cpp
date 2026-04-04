@@ -1541,6 +1541,60 @@ namespace rwe
         }
     }
 
+    void GameSimulation::updateInterceptors()
+    {
+        // Interceptor weapons destroy incoming targetable projectiles within coverage radius
+        for (auto& [unitId, unit] : units)
+        {
+            if (unit.isDead())
+            {
+                continue;
+            }
+
+            for (const auto& weapon : unit.weapons)
+            {
+                if (!weapon)
+                {
+                    continue;
+                }
+
+                auto weaponDefIt = weaponDefinitions.find(weapon->weaponType);
+                if (weaponDefIt == weaponDefinitions.end() || !weaponDefIt->second.interceptor)
+                {
+                    continue;
+                }
+
+                auto coverageRadius = SimScalar(weaponDefIt->second.coverage);
+                if (coverageRadius <= 0_ss)
+                {
+                    continue;
+                }
+                auto coverageRadiusSq = coverageRadius * coverageRadius;
+
+                // Find and destroy enemy targetable projectiles within coverage
+                for (auto& [projId, projectile] : projectiles)
+                {
+                    if (projectile.isDead || projectile.owner == unit.owner)
+                    {
+                        continue;
+                    }
+
+                    auto projWeaponIt = weaponDefinitions.find(projectile.weaponType);
+                    if (projWeaponIt == weaponDefinitions.end() || !projWeaponIt->second.targetable)
+                    {
+                        continue;
+                    }
+
+                    if (unit.position.distanceSquared(projectile.position) <= coverageRadiusSq)
+                    {
+                        projectile.isDead = true;
+                        events.push_back(ProjectileDiedEvent{projId, projectile.weaponType, projectile.position, ProjectileDiedEvent::DeathType::NormalImpact});
+                    }
+                }
+            }
+        }
+    }
+
     void GameSimulation::killPlayer(PlayerId playerId)
     {
         getPlayer(playerId).status = GamePlayerStatus::Dead;
@@ -1936,6 +1990,7 @@ namespace rwe
         }
 
         updateProjectiles();
+        updateInterceptors();
 
         updateFogOfWar();
         updateRadarMap();
