@@ -1,4 +1,7 @@
 #include <GL/glew.h>
+#include <csignal>
+#include <cstdlib>
+#include <execinfo.h>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -490,8 +493,41 @@ rwe::PathMapping constructDefaultPathMapping()
     return m;
 }
 
+static void crashHandler(int sig)
+{
+    void* frames[64];
+    int count = backtrace(frames, 64);
+
+    fprintf(stderr, "\n=== CRASH: signal %d ===\n", sig);
+    backtrace_symbols_fd(frames, count, STDERR_FILENO);
+
+    // Also write to crash log file
+    FILE* f = fopen("annihilation-engine-crash.log", "w");
+    if (f)
+    {
+        fprintf(f, "=== CRASH: signal %d ===\n", sig);
+        char** symbols = backtrace_symbols(frames, count);
+        if (symbols)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                fprintf(f, "%s\n", symbols[i]);
+            }
+            free(symbols);
+        }
+        fclose(f);
+        fprintf(stderr, "Crash log written to annihilation-engine-crash.log\n");
+    }
+
+    _exit(1);
+}
+
 int main(int argc, char* argv[])
 {
+    signal(SIGSEGV, crashHandler);
+    signal(SIGABRT, crashHandler);
+    signal(SIGBUS, crashHandler);
+    signal(SIGFPE, crashHandler);
     try
     {
         auto localDataPath = rwe::getLocalDataPath();

@@ -45,6 +45,13 @@ if(APPLE)
     # Suppress OpenGL deprecation warnings on macOS
     add_compile_definitions(GL_SILENCE_DEPRECATION)
 endif()
+
+# Always include debug symbols for crash diagnostics (even in Release)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        add_compile_options(-g)
+    endif()
+endif()
 add_subdirectory("libs/rapidcheck")
 add_subdirectory("libs/rapidcheck/extras/catch")
 
