@@ -52,34 +52,17 @@ namespace rwe
         io->IniFilename = this->iniPath.data();
         io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-        // Get PIXEL size for proper DPI scaling (Retina = 2x logical)
-        int pixW = 0, pixH = 0;
-        SDL_GetWindowSizeInPixels(window, &pixW, &pixH);
-        int logW = 0, logH = 0;
-        SDL_GetWindowSize(window, &logW, &logH);
-        float pixelRatio = (logW > 0) ? static_cast<float>(pixW) / static_cast<float>(logW) : 1.0f;
-        float dpiScale = std::max(1.0f, static_cast<float>(pixH) / 768.0f);
-
-        // Load font at native pixel resolution for crisp rendering
-        float fontSize = 18.0f * dpiScale;
-
-        // Increase font atlas size for high-DPI
-        io->Fonts->Flags |= ImFontAtlasFlags_NoBakedLines;
+        // Use default ImGui font scaled for DPI (RmlUi handles styled menus)
+        int winH = 0;
+        SDL_GetWindowSize(window, nullptr, &winH);
+        float dpiScale = std::max(1.0f, static_cast<float>(winH) / 768.0f);
 
         ImFontConfig fontConfig;
+        fontConfig.SizePixels = 14.0f * dpiScale;
         fontConfig.OversampleH = 2;
         fontConfig.OversampleV = 2;
-        fontConfig.PixelSnapH = true;
-        auto* font = io->Fonts->AddFontFromFileTTF("assets/fonts/Orbitron-Regular.ttf", fontSize, &fontConfig);
-        if (!font)
-        {
-            fontConfig.SizePixels = fontSize;
-            io->Fonts->AddFontDefault(&fontConfig);
-        }
-
-        // Scale ImGui coordinates for Retina (ImGui works in logical coords)
-        io->FontGlobalScale = 1.0f / pixelRatio;
-        io->DisplayFramebufferScale = ImVec2(pixelRatio, pixelRatio);
+        io->Fonts->AddFontDefault(&fontConfig);
+        io->FontGlobalScale = 1.0f;
 
         // Modern global style
         ImGui::StyleColorsDark();

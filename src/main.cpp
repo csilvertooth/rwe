@@ -202,8 +202,6 @@ namespace rwe
         rwe::RmlUiContext rmlUiContext(window.get(), glContext.get());
         rmlUiContext.loadFont("assets/fonts/Orbitron-Regular.ttf");
         rmlUiContext.loadFont("assets/fonts/Orbitron-Bold.ttf");
-        // Test: load options document to verify rendering
-        rmlUiContext.loadDocument("assets/ui/options.rml");
 
         LOG_INFO << "Initializing virtual file system";
         CompositeVirtualFileSystem vfs;
