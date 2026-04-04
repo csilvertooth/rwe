@@ -685,7 +685,21 @@ namespace rwe
 
     Projectile GameSimulation::createProjectileFromWeapon(PlayerId owner, const std::string& weaponType, const SimVector& position, const SimVector& direction, SimScalar distanceToTarget, std::optional<UnitId> targetUnit)
     {
-        const auto& weaponDefinition = weaponDefinitions.at(weaponType);
+        auto weaponIt = weaponDefinitions.find(weaponType);
+        if (weaponIt == weaponDefinitions.end())
+        {
+            // Weapon type not found — create a dummy projectile that dies immediately
+            Projectile p;
+            p.weaponType = weaponType;
+            p.owner = owner;
+            p.position = position;
+            p.previousPosition = position;
+            p.origin = position;
+            p.velocity = SimVector(0_ss, 0_ss, 0_ss);
+            p.lastSmoke = gameTime;
+            return p;
+        }
+        const auto& weaponDefinition = weaponIt->second;
 
         Projectile projectile;
         projectile.weaponType = weaponType;
@@ -737,8 +751,8 @@ namespace rwe
         projectile.sourceUnit = sourceUnit;
 
         // Beam weapons apply damage instantly on spawn
-        const auto& weaponDefinition = weaponDefinitions.at(weapon.weaponType);
-        if (weaponDefinition.beamWeapon)
+        auto weaponDefIt = weaponDefinitions.find(weapon.weaponType);
+        if (weaponDefIt != weaponDefinitions.end() && weaponDefIt->second.beamWeapon)
         {
             doProjectileImpact(projectile, ImpactType::Normal);
         }
