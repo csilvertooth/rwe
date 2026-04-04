@@ -65,6 +65,8 @@ namespace rwe
 
         bool handleUnloadOrder(UnitInfo unitInfo, const UnloadOrder& unloadOrder);
 
+        bool handleAreaReclaimOrder(UnitInfo unitInfo, const AreaReclaimOrder& order);
+
         bool handleBuild(UnitInfo unitInfo, const std::string& unitType);
 
         void clearBuild(UnitInfo unitInfo);

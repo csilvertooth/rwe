@@ -1089,6 +1089,9 @@ namespace rwe
             },
             [&](const UnloadOrder& o) {
                 return handleUnloadOrder(unitInfo, o);
+            },
+            [&](const AreaReclaimOrder& o) {
+                return handleAreaReclaimOrder(unitInfo, o);
             });
     }
 
@@ -1404,6 +1407,55 @@ namespace rwe
             return true;
         }
 
+        return false;
+    }
+
+    bool UnitBehaviorService::handleAreaReclaimOrder(UnitInfo unitInfo, const AreaReclaimOrder& order)
+    {
+        if (!unitInfo.definition->builder)
+        {
+            return true;
+        }
+
+        auto radiusSq = order.radius * order.radius;
+
+        // Find the nearest reclaimable feature within the area
+        std::optional<FeatureId> nearestFeature;
+        SimScalar nearestDist = radiusSq + 1_ss;
+
+        for (const auto& [featureId, feature] : sim->features)
+        {
+            if (feature.position.distanceSquared(order.center) > radiusSq)
+            {
+                continue;
+            }
+
+            const auto& featureDef = sim->getFeatureDefinition(feature.featureName);
+            if (!featureDef.reclaimable)
+            {
+                continue;
+            }
+
+            auto dist = unitInfo.state->position.distanceSquared(feature.position);
+            if (dist < nearestDist)
+            {
+                nearestDist = dist;
+                nearestFeature = featureId;
+            }
+        }
+
+        if (!nearestFeature)
+        {
+            return true; // nothing left to reclaim
+        }
+
+        // Reclaim the nearest feature (reuse single reclaim handler)
+        ReclaimOrder singleReclaim(*nearestFeature);
+        if (handleReclaimOrder(unitInfo, singleReclaim))
+        {
+            // Feature was reclaimed or gone, loop back to find next
+            return false; // keep processing the area order
+        }
         return false;
     }
 

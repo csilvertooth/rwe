@@ -76,5 +76,12 @@ namespace rwe
         explicit UnloadOrder(const SimVector& position) : position(position) {}
     };
 
-    using UnitOrder = std::variant<MoveOrder, AttackOrder, BuildOrder, BuggerOffOrder, CompleteBuildOrder, GuardOrder, ReclaimOrder, CaptureOrder, LoadOrder, UnloadOrder>;
+    struct AreaReclaimOrder
+    {
+        SimVector center;
+        SimScalar radius;
+        AreaReclaimOrder(const SimVector& center, SimScalar radius) : center(center), radius(radius) {}
+    };
+
+    using UnitOrder = std::variant<MoveOrder, AttackOrder, BuildOrder, BuggerOffOrder, CompleteBuildOrder, GuardOrder, ReclaimOrder, CaptureOrder, LoadOrder, UnloadOrder, AreaReclaimOrder>;
 }

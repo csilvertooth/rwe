@@ -89,6 +89,11 @@ namespace rwe
         {
             // TODO: add protobuf serialization for unload orders
         }
+
+        void operator()(const AreaReclaimOrder&)
+        {
+            // TODO: add protobuf serialization for area reclaim orders
+        }
     };
 
     class WriteUnitCommandVisitor

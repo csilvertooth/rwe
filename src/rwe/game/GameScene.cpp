@@ -803,7 +803,8 @@ namespace rwe
                     if (!unitOption) { return pos; }
                     return unitOption->get().position;
                 },
-                [&](const UnloadOrder& o) { return o.position; });
+                [&](const UnloadOrder& o) { return o.position; },
+                [&](const AreaReclaimOrder& o) { return o.center; });
 
             auto waypointIcon = match(
                 order,
@@ -816,7 +817,8 @@ namespace rwe
                 [&](const ReclaimOrder&) { return std::optional<CursorType>(); },
                 [&](const CaptureOrder&) { return std::optional<CursorType>(); },
                 [&](const LoadOrder&) { return std::optional<CursorType>(); },
-                [&](const UnloadOrder&) { return std::optional<CursorType>(); });
+                [&](const UnloadOrder&) { return std::optional<CursorType>(); },
+                [&](const AreaReclaimOrder&) { return std::optional<CursorType>(); });
 
             // draw waypoint icons
             if (waypointIcon)
@@ -845,7 +847,8 @@ namespace rwe
                     [&](const ReclaimOrder&) { return true; },
                     [&](const CaptureOrder&) { return true; },
                     [&](const LoadOrder&) { return true; },
-                    [&](const UnloadOrder&) { return true; });
+                    [&](const UnloadOrder&) { return true; },
+                    [&](const AreaReclaimOrder&) { return true; });
 
                 if (drawLine)
                 {
