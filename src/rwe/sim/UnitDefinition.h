@@ -155,5 +155,26 @@ namespace rwe
 
         /** If true, unit is invisible to enemy radar. */
         bool stealth{false};
+
+        // Cloaking
+        bool cloakCost{false};
+        unsigned int cloakCostMoving{0};
+        unsigned int minCloakDistance{0};
+
+        // Transport
+        unsigned int transportCapacity{0};
+        unsigned int transportSize{1};
+
+        // Kamikaze
+        bool kamikaze{false};
+        unsigned int kamikazeDistance{0};
+
+        // Misc
+        bool isAirBase{false};
+        bool teleporter{false};
+        std::string armorType;
+
+        // Naval
+        unsigned int waterline{0};
     };
 }

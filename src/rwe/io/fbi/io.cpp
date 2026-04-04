@@ -105,6 +105,23 @@ namespace rwe
         tdf.readOrDefault("SonarDistanceJam", u.sonarDistanceJam);
         tdf.readOrDefault("Stealth", u.stealth);
 
+        tdf.readOrDefault("CloakCost", u.cloakCost);
+        tdf.readOrDefault("CloakCostMoving", u.cloakCostMoving);
+        tdf.readOrDefault("MinCloakDistance", u.minCloakDistance);
+
+        tdf.readOrDefault("TransportCapacity", u.transportCapacity);
+        tdf.readOrDefault("TransportSize", u.transportSize);
+
+        tdf.readOrDefault("Kamikaze", u.kamikaze);
+        tdf.readOrDefault("KamikazeDistance", u.kamikazeDistance);
+
+        tdf.readOrDefault("IsAirBase", u.isAirBase);
+        tdf.readOrDefault("Teleporter", u.teleporter);
+        tdf.readOrDefault("DamageModifier", u.damageModifier);
+        tdf.readOrDefault("UnitName", u.armorType); // ArmorType defaults to unit name
+
+        tdf.readOrDefault("Waterline", u.waterline);
+
         return u;
     }
 }

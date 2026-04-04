@@ -1135,8 +1135,21 @@ namespace rwe
         auto targetPosition = getTargetPosition(target);
         if (!targetPosition)
         {
-            // target has gone away, throw away this order
             return true;
+        }
+
+        // Kamikaze units: self-destruct when close enough to target
+        if (unitDefinition.kamikaze)
+        {
+            auto kamiDist = SimScalar(unitDefinition.kamikazeDistance);
+            if (kamiDist <= 0_ss) kamiDist = 50_ss;
+            if (unitInfo.state->position.distanceSquared(*targetPosition) <= kamiDist * kamiDist)
+            {
+                sim->killUnit(unitInfo.id);
+                return true;
+            }
+            navigateTo(unitInfo, attackTargetToNavigationGoal(target));
+            return false;
         }
 
         auto maxRangeSquared = weaponDefinition.maxRange * weaponDefinition.maxRange;

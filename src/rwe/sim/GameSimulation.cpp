@@ -729,6 +729,7 @@ namespace rwe
         projectile.damage = weaponDefinition.damage;
 
         projectile.damageRadius = weaponDefinition.damageRadius;
+        projectile.edgeEffectiveness = weaponDefinition.edgeEffectiveness;
 
         if (weaponDefinition.weaponTimer)
         {
@@ -1372,8 +1373,11 @@ namespace rwe
               return;
           }
 
-          // apply appropriate damage
-          auto damageScale = std::clamp(1_ss - (rweSqrt(unitDistanceSquared) / radius), 0_ss, 1_ss);
+          // apply appropriate damage with edge effectiveness
+          auto distFraction = rweSqrt(unitDistanceSquared) / radius;
+          auto damageScale = std::clamp(
+              SimScalar(projectile.edgeEffectiveness) + (1_ss - SimScalar(projectile.edgeEffectiveness)) * (1_ss - distFraction),
+              0_ss, 1_ss);
           auto rawDamage = projectile.getDamage(unit.unitType);
           auto scaledDamage = simScalarToUInt(SimScalar(rawDamage) * damageScale);
           applyDamage(*u, scaledDamage, projectile.sourceUnit, projectile.paralyzer); });

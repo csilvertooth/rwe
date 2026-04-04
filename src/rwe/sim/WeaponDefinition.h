@@ -75,5 +75,23 @@ namespace rwe
 
         /** Metal cost per shot. Deducted from owner when firing. 0 = free. */
         Metal metalPerShot{0};
+
+        /** If true, weapon uses stockpile ammo system. */
+        bool stockpile{false};
+
+        /** Damage falloff from center to edge of AOE. 0 = no falloff, 1 = full falloff. */
+        float edgeEffectiveness{0.0f};
+
+        /** Accuracy modifier (lower = less accurate). 0 = default. */
+        unsigned int accuracy{0};
+
+        /** If true, weapon is an interceptor (shoots down enemy projectiles). */
+        bool interceptor{false};
+
+        /** Interceptor coverage radius. */
+        unsigned int coverage{0};
+
+        /** If true, this projectile can be targeted by interceptors. */
+        bool targetable{false};
     };
 }

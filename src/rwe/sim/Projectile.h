@@ -48,6 +48,9 @@ namespace rwe
         /** If true, this projectile paralyzes instead of damaging. */
         bool paralyzer{false};
 
+        /** Edge effectiveness for AOE damage falloff. 0 = full falloff, 1 = no falloff. */
+        float edgeEffectiveness{0.0f};
+
         SimVector getBackPosition(SimScalar duration) const;
 
         SimVector getPreviousBackPosition(SimScalar duration) const;

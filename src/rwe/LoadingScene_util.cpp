@@ -226,6 +226,13 @@ namespace rwe
         weaponDefinition.energyPerShot = Energy(tdf.energyPerShot);
         weaponDefinition.metalPerShot = Metal(tdf.metalPerShot);
 
+        weaponDefinition.stockpile = tdf.stockpile;
+        weaponDefinition.edgeEffectiveness = tdf.edgeEffectiveness;
+        weaponDefinition.accuracy = tdf.accuracy;
+        weaponDefinition.interceptor = tdf.interceptor;
+        weaponDefinition.coverage = tdf.coverage;
+        weaponDefinition.targetable = tdf.targetable;
+
         return weaponDefinition;
     }
 
@@ -371,6 +378,21 @@ namespace rwe
         u.radarDistanceJam = fbi.radarDistanceJam;
         u.sonarDistanceJam = fbi.sonarDistanceJam;
         u.stealth = fbi.stealth;
+
+        u.cloakCost = fbi.cloakCost;
+        u.cloakCostMoving = fbi.cloakCostMoving;
+        u.minCloakDistance = fbi.minCloakDistance;
+
+        u.transportCapacity = fbi.transportCapacity;
+        u.transportSize = fbi.transportSize;
+
+        u.kamikaze = fbi.kamikaze;
+        u.kamikazeDistance = fbi.kamikazeDistance;
+
+        u.isAirBase = fbi.isAirBase;
+        u.teleporter = fbi.teleporter;
+        u.armorType = fbi.armorType;
+        u.waterline = fbi.waterline;
 
         u.yardMapContainsGeo = false;
 
