@@ -1163,27 +1163,66 @@ namespace rwe
 
         if (healthBarsVisible)
         {
+            // Batch all health bars into a single draw call
+            auto uiVpMatrix = worldUiRenderService.getViewProjectionMatrix();
+            auto worldToHealthUi = worldUiRenderService.getInverseViewProjectionMatrix() * viewProjectionMatrix;
+            ColoredMeshBatch healthBatch;
+            Vector3f borderColor(0.0f, 0.0f, 0.0f);
+
             for (const auto& [_, unit] : simulation.units)
             {
                 if (!unit.isOwnedBy(localPlayerId))
                 {
-                    // only draw healthbars on units we own
                     continue;
                 }
-
                 if (unit.hitPoints == 0)
                 {
-                    // Do not show health bar when the unit has zero health.
-                    // This can happen when the unit is still a freshly created nanoframe.
                     continue;
                 }
 
                 const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
+                auto uiPos = worldToHealthUi * simVectorToFloat(unit.position);
+                float x = std::floor(uiPos.x) - 17.0f;
+                float y = std::floor(uiPos.y) + 8.0f;
+                float w = 35.0f;
+                float h = 5.0f;
+                float bw = 1.0f;
+                float pct = static_cast<float>(unit.hitPoints) / static_cast<float>(unitDefinition.maxHitPoints);
+                float innerW = 1.0f + std::floor(pct * (w - 2.0f * bw - 1.0f));
+                float innerH = h - 2.0f * bw;
 
-                auto uiPos = worldUiRenderService.getInverseViewProjectionMatrix()
-                    * viewProjectionMatrix
-                    * simVectorToFloat(unit.position);
-                worldUiRenderService.drawHealthBar(uiPos.x, uiPos.y, static_cast<float>(unit.hitPoints) / static_cast<float>(unitDefinition.maxHitPoints));
+                Vector3f healthColor;
+                if (pct > 0.66f) healthColor = Vector3f(0.0f, 1.0f, 0.0f);
+                else if (pct > 0.33f) healthColor = Vector3f(1.0f, 1.0f, 0.0f);
+                else healthColor = Vector3f(1.0f, 0.0f, 0.0f);
+
+                // Border (full bar area)
+                healthBatch.triangles.emplace_back(Vector3f(x, y, 0.0f), borderColor);
+                healthBatch.triangles.emplace_back(Vector3f(x, y + h, 0.0f), borderColor);
+                healthBatch.triangles.emplace_back(Vector3f(x + w, y + h, 0.0f), borderColor);
+                healthBatch.triangles.emplace_back(Vector3f(x, y, 0.0f), borderColor);
+                healthBatch.triangles.emplace_back(Vector3f(x + w, y + h, 0.0f), borderColor);
+                healthBatch.triangles.emplace_back(Vector3f(x + w, y, 0.0f), borderColor);
+
+                // Health fill
+                float ix = x + bw;
+                float iy = y + bw;
+                healthBatch.triangles.emplace_back(Vector3f(ix, iy, 0.0f), healthColor);
+                healthBatch.triangles.emplace_back(Vector3f(ix, iy + innerH, 0.0f), healthColor);
+                healthBatch.triangles.emplace_back(Vector3f(ix + innerW, iy + innerH, 0.0f), healthColor);
+                healthBatch.triangles.emplace_back(Vector3f(ix, iy, 0.0f), healthColor);
+                healthBatch.triangles.emplace_back(Vector3f(ix + innerW, iy + innerH, 0.0f), healthColor);
+                healthBatch.triangles.emplace_back(Vector3f(ix + innerW, iy, 0.0f), healthColor);
+            }
+
+            if (!healthBatch.triangles.empty())
+            {
+                const auto& shader = sceneContext.shaders->basicColor;
+                sceneContext.graphics->bindShader(shader.handle.get());
+                sceneContext.graphics->setUniformFloat(shader.alpha, 1.0f);
+                sceneContext.graphics->setUniformMatrix(shader.mvpMatrix, uiVpMatrix);
+                auto mesh = sceneContext.graphics->createColoredMesh(healthBatch.triangles, GL_STREAM_DRAW);
+                sceneContext.graphics->drawTriangles(mesh);
             }
         }
 
