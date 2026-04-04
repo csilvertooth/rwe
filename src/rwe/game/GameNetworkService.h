@@ -66,6 +66,9 @@ namespace rwe
              */
             float averageRoundTripTime{0};
 
+            unsigned int packetsSent{0};
+            unsigned int packetsReceived{0};
+
             EndpointInfo(const PlayerId& playerId, const asio::ip::udp::endpoint& endpoint)
                 : playerId(playerId), endpoint(endpoint)
             {

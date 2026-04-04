@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <rwe/util/Index.h>
+#include <rwe/util/SimpleLogger.h>
 
 namespace rwe
 {
@@ -336,7 +337,8 @@ namespace rwe
             auto pieceIndexIt = modelDefinition.pieceIndicesByName.find(toUpper(*parentPiece));
             if (pieceIndexIt == modelDefinition.pieceIndicesByName.end())
             {
-                throw std::runtime_error("missing piece definition: " + *parentPiece);
+                LOG_ERROR << "missing piece definition: " << *parentPiece;
+                return Matrix4f::identity();
             }
             const auto& pieceDef = modelDefinition.pieces[pieceIndexIt->second];
 
@@ -364,7 +366,8 @@ namespace rwe
             auto pieceIndexIt = modelDefinition.pieceIndicesByName.find(toUpper(*parentPiece));
             if (pieceIndexIt == modelDefinition.pieceIndicesByName.end())
             {
-                throw std::runtime_error("missing piece definition: " + *parentPiece);
+                LOG_ERROR << "missing piece definition: " << *parentPiece;
+                return Matrix4f::identity();
             }
 
             const auto& pieceDef = modelDefinition.pieces[pieceIndexIt->second];
@@ -994,12 +997,21 @@ namespace rwe
                         truncateToInterval(position.y, 2.0f),
                         std::round(position.z));
                     Matrix4f conversionMatrix = Matrix4f::scale(Vector3f(1.0f, -2.0f, 1.0f));
-                    const auto spriteSeries = gameMediaDatabase.getSpriteSeries("FX", "flamestream").value();
+                    const auto spriteSeriesOpt = gameMediaDatabase.getSpriteSeries("FX", "flamestream");
+                    if (!spriteSeriesOpt || !projectile.dieOnFrame)
+                    {
+                        LOG_ERROR << "Missing flamestream sprite or dieOnFrame for projectile, skipping render";
+                        return;
+                    }
+                    const auto spriteSeries = spriteSeriesOpt.value();
                     auto timeSinceSpawn = currentTime - projectile.createdAt;
                     auto fullLifetime = projectile.dieOnFrame.value() - projectile.createdAt;
                     auto percentComplete = static_cast<float>(timeSinceSpawn.value) / static_cast<float>(fullLifetime.value);
                     auto frameIndex = static_cast<unsigned int>(percentComplete * spriteSeries->sprites.size());
-                    assert(frameIndex < spriteSeries->sprites.size());
+                    if (frameIndex >= spriteSeries->sprites.size())
+                    {
+                        frameIndex = static_cast<unsigned int>(spriteSeries->sprites.size() - 1);
+                    }
                     const auto& sprite = *spriteSeries->sprites[frameIndex];
                     auto modelMatrix = Matrix4f::translation(snappedPosition) * conversionMatrix * sprite.getTransform();
                     auto mvpMatrix = viewProjectionMatrix * modelMatrix;

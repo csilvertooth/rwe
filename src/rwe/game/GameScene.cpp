@@ -3078,7 +3078,7 @@ namespace rwe
             dumpFile.open("rwe-dump-" + std::to_string(std::rand()) + ".json");
             dumpFile << dumpJson(simulation);
             dumpFile.close();
-            throw std::runtime_error("Desync detected");
+            LOG_ERROR << "Desync detected! State dumped to rwe-dump file. Game may be unstable.";
         }
 
         auto playerCommands = playerCommandService->tryPopCommands();
@@ -4266,7 +4266,9 @@ namespace rwe
         auto it = unitGuiInfos.find(unitId);
         if (it == unitGuiInfos.end())
         {
-            throw std::logic_error("Gui info not found for unit " + std::to_string(unitId.value));
+            LOG_ERROR << "Gui info not found for unit " << unitId.value << ", returning default";
+            static const UnitGuiInfo defaultGuiInfo{};
+            return defaultGuiInfo;
         }
         return it->second;
     }

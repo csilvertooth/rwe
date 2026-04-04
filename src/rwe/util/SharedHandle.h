@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <memory>
 #include <rwe/util/UniqueHandle.h>
 
 namespace rwe
@@ -13,56 +14,43 @@ namespace rwe
 
     private:
         Value handle;
-        unsigned int* referenceCount;
+        std::shared_ptr<unsigned int> referenceCount;
 
     public:
         SharedHandle() : handle(), referenceCount(nullptr) {}
 
-        explicit SharedHandle(Value handle) : handle(handle), referenceCount(new unsigned int(1)) {}
+        explicit SharedHandle(Value handle) : handle(handle), referenceCount(std::make_shared<unsigned int>(1)) {}
 
-        ~SharedHandle()
-        {
-            destroy();
-        }
-
-        SharedHandle(const Type& other) : handle(other.handle), referenceCount(other.referenceCount)
-        {
-            if (isValid())
-            {
-                ++(*referenceCount);
-            }
-        }
-
+        SharedHandle(const Type& other) = default;
         SharedHandle& operator=(const Type& other)
         {
-            destroy();
-
-            handle = other.handle;
-            referenceCount = other.referenceCount;
-
-            if (isValid())
+            if (this != &other)
             {
-                ++(*referenceCount);
+                destroy();
+                handle = other.handle;
+                referenceCount = other.referenceCount;
             }
-
             return *this;
         }
 
-        SharedHandle(Type&& other) noexcept : handle(other.handle), referenceCount(other.referenceCount)
+        SharedHandle(Type&& other) noexcept : handle(other.handle), referenceCount(std::move(other.referenceCount))
         {
-            other.referenceCount = nullptr;
         }
 
         SharedHandle& operator=(Type&& other) noexcept
         {
-            destroy();
-
-            handle = other.handle;
-            referenceCount = other.referenceCount;
-
-            other.referenceCount = nullptr;
-
+            if (this != &other)
+            {
+                destroy();
+                handle = other.handle;
+                referenceCount = std::move(other.referenceCount);
+            }
             return *this;
+        }
+
+        ~SharedHandle()
+        {
+            destroy();
         }
 
         explicit SharedHandle(UniqueHandle<Value, Deleter>&& other) noexcept : SharedHandle(other.release())
@@ -104,12 +92,7 @@ namespace rwe
 
         unsigned int useCount() const
         {
-            if (referenceCount == nullptr)
-            {
-                return 0;
-            }
-
-            return *referenceCount;
+            return referenceCount ? referenceCount.use_count() : 0;
         }
 
         /** Replaces the contents of the handle with the given value. */
@@ -117,7 +100,7 @@ namespace rwe
         {
             destroy();
             handle = newValue;
-            referenceCount = new unsigned int(1);
+            referenceCount = std::make_shared<unsigned int>(1);
         }
 
         /** Resets the handle to the empty state. */
@@ -130,14 +113,11 @@ namespace rwe
     private:
         void destroy()
         {
-            if (isValid())
+            if (referenceCount && referenceCount.use_count() == 1)
             {
-                if (--(*referenceCount) == 0)
-                {
-                    Deleter()(handle);
-                    delete referenceCount;
-                }
+                Deleter()(handle);
             }
+            referenceCount.reset();
         }
     };
 }

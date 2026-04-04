@@ -93,7 +93,7 @@ jobs:
           mkdir build
           pushd build
           cmake -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ..
-          make -j 4
+          make -j $(nproc)
           popd
       - name: test rwe
         run: ./build/rwe_test
@@ -109,7 +109,28 @@ jobs:
       - name: init submodules (shallow)
         run: git submodule update --init --recursive --depth 1
       - name: install homebrew packages
-        run: brew install glew libpng zlib autoconf automake libtool
+        run: brew install glew libpng zlib autoconf automake libtool ccache
+      - name: restore ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/Library/Caches/ccache
+          key: ccache-${{ runner.os }}-${{ matrix.configuration }}-${{ github.sha }}
+          restore-keys: ccache-${{ runner.os }}-${{ matrix.configuration }}-
+      - name: install node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+      - name: install npm packages
+        working-directory: launcher
+        run: npm ci
+      - name: test launcher
+        working-directory: launcher
+        run: |
+          npm run tsc
+          npm test
+          npm run lint
       - name: restore protobuf
         id: cache-protobuf-restore
         uses: actions/cache/restore@v5
@@ -129,8 +150,8 @@ jobs:
         run: |
           mkdir build
           pushd build
-          cmake -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} ..
-          make -j 3
+          cmake -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ..
+          make -j $(sysctl -n hw.ncpu)
           popd
       - name: test
         run: ./build/rwe_test
@@ -270,7 +291,7 @@ jobs:
           mkdir build
           pushd build
           cmake -G 'Unix Makefiles' -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ..
-          make -j 4
+          make -j $(nproc)
           popd
         shell: msys2 {0}
       - name: test rwe

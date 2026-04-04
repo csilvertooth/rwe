@@ -42,7 +42,8 @@ add_subdirectory("libs/catch2")
 set(RC_ENABLE_CATCH OFF CACHE BOOL "Enables Catch support in RapidCheck" FORCE)
 set(RC_ENABLE_BOOST OFF CACHE BOOL "Enables Boost support in RapidCheck" FORCE)
 if(APPLE)
-    add_definitions(-DGL_SILENCE_DEPRECATION)
+    # Suppress OpenGL deprecation warnings on macOS
+    add_compile_definitions(GL_SILENCE_DEPRECATION)
 endif()
 add_subdirectory("libs/rapidcheck")
 add_subdirectory("libs/rapidcheck/extras/catch")
@@ -98,9 +99,8 @@ endfunction()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
-if(NOT MSVC)
-    set(CMAKE_CXX_STANDARD 20)
-endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenGL REQUIRED)
 
@@ -547,6 +547,7 @@ set(SOURCE_FILES
     src/rwe/util/Result.h
     src/rwe/util/SharedHandle.h
     src/rwe/util/UniqueHandle.h
+    src/rwe/util/safe_lookup.h
     src/rwe/util/collection_util.h
     src/rwe/util/match.h
     src/rwe/util/range_util.h
@@ -564,16 +565,19 @@ set(SOURCE_FILES
     src/rwe/vfs/HpiFileSystem.h
     )
 
-if(WIN32)
-    add_definitions(-DRWE_PLATFORM_WINDOWS)
-else()
-    add_definitions(-DRWE_PLATFORM_LINUX)
-endif()
-
 add_library(librwe STATIC ${SOURCE_FILES} ${PROTO_SOURCE_FILES} ${PROTO_HEADER_FILES})
 set_target_properties(librwe PROPERTIES PREFIX "")
+
+if(WIN32)
+    target_compile_definitions(librwe PUBLIC RWE_PLATFORM_WINDOWS)
+elseif(APPLE)
+    target_compile_definitions(librwe PUBLIC RWE_PLATFORM_APPLE)
+else()
+    target_compile_definitions(librwe PUBLIC RWE_PLATFORM_LINUX)
+endif()
+
 if(MSVC)
-    target_compile_options(librwe PUBLIC "/std:c++20" "/EHsc")
+    target_compile_options(librwe PUBLIC "/EHsc")
 else()
     target_compile_options(librwe PUBLIC "-Wall" "-Wextra")
 endif()
@@ -582,7 +586,7 @@ configure_file("src/rwe/config.h.in" "config/rwe/config.h" @ONLY)
 target_include_directories(librwe PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/config")
 
 target_include_directories(librwe PUBLIC "libs/asio/asio/include")
-add_definitions(-DASIO_STANDALONE)
+target_compile_definitions(librwe PUBLIC ASIO_STANDALONE)
 if(WIN32)
     # winsock needed for asio on windows
     target_link_libraries(librwe ws2_32)
@@ -629,7 +633,8 @@ target_link_libraries(librwe ${ZLIB_LIBRARIES})
 target_include_directories(librwe PUBLIC ${ZLIB_INCLUDE_DIRS})
 
 target_copy_file(librwe ${PNG_DLL})
-
+target_link_libraries(librwe ${PNG_LIBRARIES})
+target_include_directories(librwe PUBLIC ${PNG_INCLUDE_DIRS})
 
 if(TARGET protobuf::libprotobuf)
     message(STATUS "Using protobuf::libprotobuf imported target")
@@ -680,24 +685,18 @@ target_link_libraries(vfs_test librwe)
 
 add_executable(gaf_test src/gaf_test.cpp)
 target_link_libraries(gaf_test librwe)
-target_link_libraries(gaf_test ${PNG_LIBRARIES})
-target_include_directories(gaf_test PUBLIC ${PNG_INCLUDE_DIRS})
 if(WIN32)
     target_compile_definitions(gaf_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
 
 add_executable(pcx_test src/pcx_test.cpp)
 target_link_libraries(pcx_test librwe)
-target_link_libraries(pcx_test ${PNG_LIBRARIES})
-target_include_directories(pcx_test PUBLIC ${PNG_INCLUDE_DIRS})
 if(WIN32)
     target_compile_definitions(pcx_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
 
 add_executable(tnt_test src/tnt_test.cpp)
 target_link_libraries(tnt_test librwe)
-target_link_libraries(tnt_test ${PNG_LIBRARIES})
-target_include_directories(tnt_test PUBLIC ${PNG_INCLUDE_DIRS})
 if(WIN32)
     target_compile_definitions(tnt_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
@@ -710,16 +709,12 @@ target_link_libraries(cob_test librwe)
 
 add_executable(fnt_test src/fnt_test.cpp)
 target_link_libraries(fnt_test librwe)
-target_link_libraries(fnt_test ${PNG_LIBRARIES})
-target_include_directories(fnt_test PUBLIC ${PNG_INCLUDE_DIRS})
 if(WIN32)
     target_compile_definitions(fnt_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
 
 add_executable(texture_test src/texture_test.cpp)
 target_link_libraries(texture_test librwe)
-target_link_libraries(texture_test ${PNG_LIBRARIES})
-target_include_directories(texture_test PUBLIC ${PNG_INCLUDE_DIRS})
 if(WIN32)
     target_compile_definitions(texture_test PRIVATE __STDC_LIB_EXT1__=1)
 endif()
@@ -727,8 +722,6 @@ endif()
 add_executable(rwe_bridge src/bridge.cpp)
 target_link_libraries(rwe_bridge PRIVATE librwe)
 target_link_libraries(rwe_bridge PRIVATE nlohmann_json::nlohmann_json)
-target_link_libraries(rwe_bridge PRIVATE ${PNG_LIBRARIES})
-target_include_directories(rwe_bridge PUBLIC ${PNG_INCLUDE_DIRS})
 if(WIN32)
     target_compile_definitions(rwe_bridge PRIVATE __STDC_LIB_EXT1__=1)
 endif()

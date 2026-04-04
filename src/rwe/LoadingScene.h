@@ -40,30 +40,6 @@ namespace rwe
 
     using PlayerControllerType = std::variant<PlayerControllerTypeHuman, PlayerControllerTypeComputer, PlayerControllerTypeNetwork>;
 
-    class IsHumanVisitor
-    {
-    public:
-        bool operator()(const PlayerControllerTypeHuman&) const { return true; }
-        bool operator()(const PlayerControllerTypeComputer&) const { return false; }
-        bool operator()(const PlayerControllerTypeNetwork&) const { return false; }
-    };
-
-    class IsComputerVisitor
-    {
-    public:
-        bool operator()(const PlayerControllerTypeHuman&) const { return false; }
-        bool operator()(const PlayerControllerTypeComputer&) const { return true; }
-        bool operator()(const PlayerControllerTypeNetwork&) const { return false; }
-    };
-
-    class GetNetworkAddressVisitor
-    {
-    public:
-        std::optional<std::pair<std::reference_wrapper<const std::string>, std::reference_wrapper<const std::string>>> operator()(const PlayerControllerTypeHuman&) const { return std::nullopt; }
-        std::optional<std::pair<std::reference_wrapper<const std::string>, std::reference_wrapper<const std::string>>> operator()(const PlayerControllerTypeComputer&) const { return std::nullopt; }
-        std::optional<std::pair<std::reference_wrapper<const std::string>, std::reference_wrapper<const std::string>>> operator()(const PlayerControllerTypeNetwork& p) const { return std::make_pair(std::cref(p.host), std::cref(p.port)); }
-    };
-
     struct PlayerInfo
     {
         std::optional<std::string> name;

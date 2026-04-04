@@ -217,6 +217,7 @@ namespace rwe
         writeInt(&sendBuffer[messageSize], computeCrc(sendBuffer.data(), messageSize));
 
         socket.send_to(asio::buffer(sendBuffer.data(), messageSize + 4), endpoint.endpoint);
+        endpoint.packetsSent++;
 
         auto nextSequenceNumber = SequenceNumber(endpoint.nextCommandToSend.value + (endpoint.sendBuffer.size()));
         if (endpoint.sendTimes.empty() || endpoint.sendTimes.back().first < nextSequenceNumber)
@@ -273,6 +274,14 @@ namespace rwe
         }
 
         EndpointInfo& endpoint = *endpointIt;
+        endpoint.packetsReceived++;
+
+        // Log periodic network health summary every 300 packets (~10 seconds at 30 tick/s)
+        if (endpoint.packetsReceived % 300 == 0)
+        {
+            LOG_INFO << "Network health [player " << endpoint.playerId.value << "]: sent=" << endpoint.packetsSent
+                << " recv=" << endpoint.packetsReceived << " avgRTT=" << endpoint.averageRoundTripTime << "ms";
+        }
 
         const auto& message = outerMessage.game_update();
 

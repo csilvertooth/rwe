@@ -1,4 +1,5 @@
 #include "Projectile.h"
+#include <rwe/util/SimpleLogger.h>
 
 namespace rwe
 {
@@ -42,6 +43,7 @@ namespace rwe
             return it->second;
         }
 
-        throw std::runtime_error("Failed to find damage entry for projectile");
+        LOG_ERROR << "Failed to find damage entry for projectile against unit type: " << unitType;
+        return 0;
     }
 }

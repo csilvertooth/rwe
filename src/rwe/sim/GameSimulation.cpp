@@ -11,6 +11,7 @@
 #include <rwe/util/collection_util.h>
 #include <rwe/util/match.h>
 #include <rwe/util/rwe_string.h>
+#include <rwe/util/SimpleLogger.h>
 #include <type_traits>
 #include <unordered_set>
 
@@ -179,13 +180,14 @@ namespace rwe
 
     std::optional<UnitWeapon> tryCreateWeapon(const GameSimulation& sim, const std::string& weaponType)
     {
-        if (sim.weaponDefinitions.find(toUpper(weaponType)) == sim.weaponDefinitions.end())
+        auto upperType = toUpper(weaponType);
+        if (sim.weaponDefinitions.find(upperType) == sim.weaponDefinitions.end())
         {
             return std::nullopt;
         }
 
         UnitWeapon weapon;
-        weapon.weaponType = toUpper(weaponType);
+        weapon.weaponType = std::move(upperType);
         return weapon;
     }
 
@@ -717,10 +719,17 @@ namespace rwe
 
         if (weaponDefinition.weaponTimer)
         {
-            auto randomDecay = weaponDefinition.randomDecay.value().value;
-            std::uniform_int_distribution<unsigned int> dist(0, randomDecay);
-            auto randomVal = dist(rng);
-            projectile.dieOnFrame = gameTime + *weaponDefinition.weaponTimer - GameTime(randomDecay / 2) + GameTime(randomVal);
+            unsigned int randomDecay = weaponDefinition.randomDecay ? weaponDefinition.randomDecay->value : 0;
+            if (randomDecay > 0)
+            {
+                std::uniform_int_distribution<unsigned int> dist(0, randomDecay);
+                auto randomVal = dist(rng);
+                projectile.dieOnFrame = gameTime + *weaponDefinition.weaponTimer - GameTime(randomDecay / 2) + GameTime(randomVal);
+            }
+            else
+            {
+                projectile.dieOnFrame = gameTime + *weaponDefinition.weaponTimer;
+            }
         }
         else if (std::holds_alternative<ProjectilePhysicsTypeLineOfSight>(weaponDefinition.physicsType))
         {
@@ -1683,8 +1692,13 @@ namespace rwe
 
     void GameSimulation::trySpawnFeature(const std::string& featureType, const SimVector& position, SimAngle rotation)
     {
-        auto featureId = tryGetFeatureDefinitionId(featureType).value();
-        auto feature = MapFeature{featureId, position, rotation};
+        auto featureId = tryGetFeatureDefinitionId(featureType);
+        if (!featureId)
+        {
+            LOG_ERROR << "trySpawnFeature: unknown feature type: " << featureType;
+            return;
+        }
+        auto feature = MapFeature{*featureId, position, rotation};
 
         addFeature(std::move(feature));
     }
@@ -1829,6 +1843,8 @@ namespace rwe
 
     void GameSimulation::tick()
     {
+        [[maybe_unused]] auto tickStart = std::chrono::steady_clock::now();
+
         gameTime += GameTime(1);
 
         updateWind();
@@ -1838,12 +1854,13 @@ namespace rwe
         pathFindingService.update(*this);
 
         // run unit scripts
+        UnitBehaviorService unitBehaviorService(this);
         for (auto& entry : units)
         {
             auto unitId = entry.first;
             auto& unit = entry.second;
 
-            UnitBehaviorService(this).update(unitId);
+            unitBehaviorService.update(unitId);
 
             for (auto& piece : unit.pieces)
             {
@@ -1887,6 +1904,13 @@ namespace rwe
         deleteDeadProjectiles();
 
         spawnNewUnits();
+
+        auto tickEnd = std::chrono::steady_clock::now();
+        auto tickDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(tickEnd - tickStart).count();
+        if (tickDurationMs > 50)
+        {
+            LOG_WARN << "Simulation tick " << gameTime.value << " took " << tickDurationMs << "ms (>50ms threshold)";
+        }
     }
 
     void GameSimulation::initFogOfWar()

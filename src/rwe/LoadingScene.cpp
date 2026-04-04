@@ -1,6 +1,7 @@
 #include "LoadingScene.h"
 #include <algorithm>
 #include <sstream>
+#include <rwe/util/match.h>
 #include <rwe/util/SpanStream.h>
 #include <rwe/LoadingScene_util.h>
 #include <rwe/atlas_util.h>
@@ -122,7 +123,9 @@ namespace rwe
             {
                 continue;
             }
-            const auto address = std::visit(GetNetworkAddressVisitor(), p->controller);
+            const auto address = match(p->controller,
+                [](const PlayerControllerTypeNetwork& n) -> std::optional<std::pair<std::reference_wrapper<const std::string>, std::reference_wrapper<const std::string>>> { return std::make_pair(std::cref(n.host), std::cref(n.port)); },
+                [](const auto&) -> std::optional<std::pair<std::reference_wrapper<const std::string>, std::reference_wrapper<const std::string>>> { return std::nullopt; });
             if (!address)
             {
                 continue;
@@ -205,13 +208,13 @@ namespace rwe
             const auto& params = gameParameters.players[i];
             if (params)
             {
-                auto playerType = std::visit(IsComputerVisitor(), params->controller) ? GamePlayerType::Computer : GamePlayerType::Human;
+                auto playerType = std::holds_alternative<PlayerControllerTypeComputer>(params->controller) ? GamePlayerType::Computer : GamePlayerType::Human;
                 GamePlayerInfo gpi{params->name, playerType, params->color, GamePlayerStatus::Alive, params->side, params->metal, params->energy, params->metal, params->energy, params->metal, params->energy};
                 auto playerId = simulation.addPlayer(gpi);
                 gamePlayers[i] = playerId;
                 playerCommandService->registerPlayer(playerId);
 
-                if (std::visit(IsHumanVisitor(), params->controller))
+                if (std::holds_alternative<PlayerControllerTypeHuman>(params->controller))
                 {
                     if (localPlayerId)
                     {

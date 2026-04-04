@@ -20,6 +20,24 @@ namespace rwe
     }
 #endif
 
+#ifdef RWE_PLATFORM_APPLE
+    std::optional<std::filesystem::path> getLocalDataPath()
+    {
+        auto home = std::getenv("HOME");
+        if (home == nullptr)
+        {
+            return std::nullopt;
+        }
+
+        std::filesystem::path path(home);
+        path /= "Library";
+        path /= "Application Support";
+        path /= "RWE";
+
+        return path;
+    }
+#endif
+
 #ifdef RWE_PLATFORM_LINUX
     std::optional<std::filesystem::path> getLocalDataPath()
     {
