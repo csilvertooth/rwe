@@ -79,6 +79,16 @@ namespace rwe
         {
             // TODO: add protobuf serialization for capture orders
         }
+
+        void operator()(const LoadOrder&)
+        {
+            // TODO: add protobuf serialization for load orders
+        }
+
+        void operator()(const UnloadOrder&)
+        {
+            // TODO: add protobuf serialization for unload orders
+        }
     };
 
     class WriteUnitCommandVisitor

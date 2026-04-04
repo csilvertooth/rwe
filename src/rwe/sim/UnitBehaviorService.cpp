@@ -1082,6 +1082,12 @@ namespace rwe
             },
             [&](const CaptureOrder& o) {
                 return handleCaptureOrder(unitInfo, o);
+            },
+            [&](const LoadOrder& o) {
+                return handleLoadOrder(unitInfo, o);
+            },
+            [&](const UnloadOrder& o) {
+                return handleUnloadOrder(unitInfo, o);
             });
     }
 
@@ -1398,6 +1404,80 @@ namespace rwe
         }
 
         return false;
+    }
+
+    bool UnitBehaviorService::handleLoadOrder(UnitInfo unitInfo, const LoadOrder& loadOrder)
+    {
+        const auto& unitDef = sim->unitDefinitions.find(unitInfo.state->unitType);
+        if (unitDef == sim->unitDefinitions.end() || unitDef->second.transportCapacity == 0)
+        {
+            return true; // not a transport
+        }
+
+        auto targetRef = sim->tryGetUnitState(loadOrder.target);
+        if (!targetRef || targetRef->get().isDead())
+        {
+            return true;
+        }
+        auto& target = targetRef->get();
+
+        // Can't load enemy units
+        if (!target.isOwnedBy(unitInfo.state->owner))
+        {
+            return true;
+        }
+
+        // Already full?
+        if (unitInfo.state->transportedUnits.size() >= unitDef->second.transportCapacity)
+        {
+            return true;
+        }
+
+        // Navigate to the unit
+        if (unitInfo.state->position.distanceSquared(target.position) > SimScalar(80) * SimScalar(80))
+        {
+            navigateTo(unitInfo, loadOrder.target);
+            return false;
+        }
+
+        // Load the unit
+        target.insideTransport = unitInfo.id;
+        unitInfo.state->transportedUnits.push_back(loadOrder.target);
+        return true;
+    }
+
+    bool UnitBehaviorService::handleUnloadOrder(UnitInfo unitInfo, const UnloadOrder& unloadOrder)
+    {
+        if (unitInfo.state->transportedUnits.empty())
+        {
+            return true;
+        }
+
+        // Navigate to drop position
+        if (unitInfo.state->position.distanceSquared(unloadOrder.position) > SimScalar(80) * SimScalar(80))
+        {
+            navigateTo(unitInfo, unloadOrder.position);
+            return false;
+        }
+
+        // Unload all units at the drop position
+        int i = 0;
+        for (const auto& cargoId : unitInfo.state->transportedUnits)
+        {
+            auto cargoRef = sim->tryGetUnitState(cargoId);
+            if (cargoRef)
+            {
+                auto& cargo = cargoRef->get();
+                cargo.insideTransport = std::nullopt;
+                auto offsetX = SimScalar((i % 3) * 30 - 30);
+                auto offsetZ = SimScalar((i / 3) * 30 - 30);
+                cargo.position = unloadOrder.position + SimVector(offsetX, 0_ss, offsetZ);
+                cargo.position.y = sim->terrain.getHeightAt(cargo.position.x, cargo.position.z);
+                ++i;
+            }
+        }
+        unitInfo.state->transportedUnits.clear();
+        return true;
     }
 
     bool UnitBehaviorService::handleBuild(UnitInfo unitInfo, const std::string& unitType)

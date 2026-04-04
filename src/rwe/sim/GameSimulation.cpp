@@ -1957,6 +1957,12 @@ namespace rwe
             auto unitId = entry.first;
             auto& unit = entry.second;
 
+            // Skip units loaded inside a transport
+            if (unit.insideTransport)
+            {
+                continue;
+            }
+
             unitBehaviorService.update(unitId);
 
             for (auto& piece : unit.pieces)

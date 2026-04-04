@@ -61,6 +61,10 @@ namespace rwe
 
         bool handleCaptureOrder(UnitInfo unitInfo, const CaptureOrder& captureOrder);
 
+        bool handleLoadOrder(UnitInfo unitInfo, const LoadOrder& loadOrder);
+
+        bool handleUnloadOrder(UnitInfo unitInfo, const UnloadOrder& unloadOrder);
+
         bool handleBuild(UnitInfo unitInfo, const std::string& unitType);
 
         void clearBuild(UnitInfo unitInfo);

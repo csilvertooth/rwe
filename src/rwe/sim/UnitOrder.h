@@ -64,5 +64,17 @@ namespace rwe
         explicit CaptureOrder(UnitId target) : target(target) {}
     };
 
-    using UnitOrder = std::variant<MoveOrder, AttackOrder, BuildOrder, BuggerOffOrder, CompleteBuildOrder, GuardOrder, ReclaimOrder, CaptureOrder>;
+    struct LoadOrder
+    {
+        UnitId target;
+        explicit LoadOrder(UnitId target) : target(target) {}
+    };
+
+    struct UnloadOrder
+    {
+        SimVector position;
+        explicit UnloadOrder(const SimVector& position) : position(position) {}
+    };
+
+    using UnitOrder = std::variant<MoveOrder, AttackOrder, BuildOrder, BuggerOffOrder, CompleteBuildOrder, GuardOrder, ReclaimOrder, CaptureOrder, LoadOrder, UnloadOrder>;
 }

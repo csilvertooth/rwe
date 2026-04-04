@@ -797,7 +797,13 @@ namespace rwe
                     auto unitOption = tryGetUnit(o.target);
                     if (!unitOption) { return pos; }
                     return unitOption->get().position;
-                });
+                },
+                [&](const LoadOrder& o) {
+                    auto unitOption = tryGetUnit(o.target);
+                    if (!unitOption) { return pos; }
+                    return unitOption->get().position;
+                },
+                [&](const UnloadOrder& o) { return o.position; });
 
             auto waypointIcon = match(
                 order,
@@ -808,7 +814,9 @@ namespace rwe
                 [&](const CompleteBuildOrder&) { return std::optional<CursorType>(CursorType::Repair); },
                 [&](const GuardOrder&) { return std::optional<CursorType>(CursorType::Guard); },
                 [&](const ReclaimOrder&) { return std::optional<CursorType>(); },
-                [&](const CaptureOrder&) { return std::optional<CursorType>(); });
+                [&](const CaptureOrder&) { return std::optional<CursorType>(); },
+                [&](const LoadOrder&) { return std::optional<CursorType>(); },
+                [&](const UnloadOrder&) { return std::optional<CursorType>(); });
 
             // draw waypoint icons
             if (waypointIcon)
@@ -835,7 +843,9 @@ namespace rwe
                     [&](const CompleteBuildOrder&) { return true; },
                     [&](const GuardOrder&) { return true; },
                     [&](const ReclaimOrder&) { return true; },
-                    [&](const CaptureOrder&) { return true; });
+                    [&](const CaptureOrder&) { return true; },
+                    [&](const LoadOrder&) { return true; },
+                    [&](const UnloadOrder&) { return true; });
 
                 if (drawLine)
                 {

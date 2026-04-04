@@ -285,6 +285,12 @@ namespace rwe
         /** If true, unit is currently cloaked (invisible to enemies outside minCloakDistance). */
         bool cloaked{false};
 
+        /** Units currently loaded inside this transport. */
+        std::vector<UnitId> transportedUnits;
+
+        /** If set, this unit is loaded inside a transport and should not be rendered/updated. */
+        std::optional<UnitId> insideTransport;
+
         /** Accumulated paralyzer/EMP damage. Unit is stunned when this exceeds maxHitPoints. */
         unsigned int stunDamage{0};
         /** If true, unit is currently paralyzed and cannot act. */
