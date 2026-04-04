@@ -315,6 +315,8 @@ namespace rwe
 
         TextureHandle dodgeMask;
         FrameBufferInfo fogFrameBuffer;
+        unsigned int lastFramebufferWidth{0};
+        unsigned int lastFramebufferHeight{0};
 
         TextureHandle fogTexture;
         std::vector<Color> fogTextureData;

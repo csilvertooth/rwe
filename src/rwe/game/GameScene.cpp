@@ -308,6 +308,17 @@ namespace rwe
 
     void GameScene::render()
     {
+        // Detect viewport resize (fullscreen toggle, window resize) and recreate framebuffers
+        if (worldViewport.width() != lastFramebufferWidth || worldViewport.height() != lastFramebufferHeight)
+        {
+            if (worldViewport.width() > 0 && worldViewport.height() > 0)
+            {
+                recreateWorldRenderTextures();
+                lastFramebufferWidth = worldViewport.width();
+                lastFramebufferHeight = worldViewport.height();
+            }
+        }
+
         if (guiVisible)
         {
             renderUi();
@@ -1632,6 +1643,22 @@ namespace rwe
         ImGui::Separator();
         ImGui::Spacing();
 
+        ImGui::Text("DISPLAY");
+        ImGui::Spacing();
+        if (sceneContext.window)
+        {
+            auto flags = SDL_GetWindowFlags(sceneContext.window);
+            bool isFullscreen = (flags & SDL_WINDOW_FULLSCREEN) != 0;
+            if (ImGui::Checkbox("Fullscreen (F11)", &isFullscreen))
+            {
+                sceneContext.sdl->setWindowFullscreen(sceneContext.window, isFullscreen);
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
         // Quit button
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.15f, 0.15f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.20f, 0.20f, 1.0f));
@@ -1817,6 +1844,16 @@ namespace rwe
         else if (keysym.key == SDLK_F10)
         {
             showDebugWindow = true;
+        }
+        else if (keysym.key == SDLK_F11)
+        {
+            // Toggle fullscreen
+            if (sceneContext.window)
+            {
+                auto flags = SDL_GetWindowFlags(sceneContext.window);
+                bool isFullscreen = (flags & SDL_WINDOW_FULLSCREEN) != 0;
+                sceneContext.sdl->setWindowFullscreen(sceneContext.window, !isFullscreen);
+            }
         }
         else if (keysym.scancode == SDL_SCANCODE_GRAVE)
         {

@@ -32,6 +32,7 @@ namespace rwe
         TimeService* const timeService;
         const PathMapping* const pathMapping;
         const GlobalConfig* const globalConfig;
+        SDL_Window* const window;
 
         SceneContext(
             SdlContext* const sdl,
@@ -48,7 +49,8 @@ namespace rwe
             const std::unordered_map<std::string, SideData>* const sideData,
             TimeService* const timeService,
             const PathMapping* const pathMapping,
-            const GlobalConfig* const globalConfig)
+            const GlobalConfig* const globalConfig,
+            SDL_Window* const window = nullptr)
             : sdl(sdl),
               viewport(viewportService),
               graphics(graphics),
@@ -63,7 +65,8 @@ namespace rwe
               sideData(sideData),
               timeService(timeService),
               pathMapping(pathMapping),
-              globalConfig(globalConfig)
+              globalConfig(globalConfig),
+              window(window)
         {
         }
     };

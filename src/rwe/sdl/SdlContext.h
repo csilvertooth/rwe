@@ -136,6 +136,16 @@ namespace rwe
             return SDL_GetWindowID(window);
         }
 
+        bool setWindowFullscreen(SDL_Window* window, bool fullscreen)
+        {
+            return SDL_SetWindowFullscreen(window, fullscreen);
+        }
+
+        void getWindowSizeInPixels(SDL_Window* window, int* w, int* h)
+        {
+            SDL_GetWindowSizeInPixels(window, w, h);
+        }
+
     private:
         friend class SdlContextManager;
     };

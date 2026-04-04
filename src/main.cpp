@@ -323,7 +323,8 @@ namespace rwe
             &sideDataMap,
             &timeService,
             &pathMapping,
-            &globalConfig);
+            &globalConfig,
+            window.get());
 
         if (gameParameters)
         {
