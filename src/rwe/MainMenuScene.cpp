@@ -1,5 +1,6 @@
 #include "MainMenuScene.h"
 #include <algorithm>
+#include <imgui.h>
 #include <rwe/LoadingScene.h>
 #include <rwe/MainMenuModel.h>
 #include <rwe/camera_util.h>
@@ -148,6 +149,119 @@ namespace rwe
     void MainMenuScene::update(int millisecondsElapsed)
     {
         topPanel().update(static_cast<float>(millisecondsElapsed) / 1000.0f);
+
+        // Render ImGui options overlay
+        if (showOptionsOverlay)
+        {
+            auto viewportW = static_cast<float>(sceneContext.viewport->width());
+            auto viewportH = static_cast<float>(sceneContext.viewport->height());
+
+            auto* drawList = ImGui::GetBackgroundDrawList();
+            drawList->AddRectFilled(ImVec2(0, 0), ImVec2(viewportW, viewportH), IM_COL32(0, 0, 0, 160));
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
+
+            auto menuW = 500.0f;
+            ImGui::SetNextWindowPos(ImVec2((viewportW - menuW) * 0.5f, viewportH * 0.1f), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(menuW, 0.0f), ImGuiCond_Always);
+            ImGui::Begin("##MainOptions", nullptr,
+                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse
+                | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize);
+
+            auto titleText = "OPTIONS";
+            auto titleSize = ImGui::CalcTextSize(titleText);
+            ImGui::SetCursorPosX((menuW - titleSize.x) * 0.5f);
+            ImGui::TextColored(ImVec4(0.7f, 0.8f, 1.0f, 1.0f), "%s", titleText);
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // Tab buttons
+            const char* tabs[] = {"Sound", "Interface", "Visuals"};
+            for (int i = 0; i < 3; ++i)
+            {
+                if (i > 0) ImGui::SameLine();
+                bool selected = (optionsTab == i);
+                if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.4f, 0.6f, 1.0f));
+                if (ImGui::Button(tabs[i], ImVec2(150.0f, 30.0f)))
+                {
+                    optionsTab = i;
+                }
+                if (selected) ImGui::PopStyleColor();
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            auto* cfg = const_cast<GlobalConfig*>(sceneContext.globalConfig);
+
+            if (optionsTab == 0) // Sound
+            {
+                ImGui::Text("SOUND");
+                ImGui::Spacing();
+                ImGui::Checkbox("Sound Enabled", &cfg->soundEnabled);
+                ImGui::SliderFloat("Sound Volume", &cfg->soundVolume, 0.0f, 1.0f, "%.0f%%");
+                ImGui::Spacing();
+                ImGui::Text("MUSIC");
+                ImGui::Spacing();
+                ImGui::Checkbox("Music Enabled", &cfg->musicEnabled);
+                ImGui::SliderFloat("Music Volume", &cfg->musicVolume, 0.0f, 1.0f, "%.0f%%");
+            }
+            else if (optionsTab == 1) // Interface
+            {
+                ImGui::Text("INTERFACE");
+                ImGui::Spacing();
+                ImGui::SliderFloat("Scroll Speed", &cfg->scrollSpeed, 0.25f, 4.0f, "%.2fx");
+                ImGui::Checkbox("Left Click Interface", &cfg->leftClickInterfaceMode);
+                ImGui::Spacing();
+                ImGui::Text("GAMEPLAY DEFAULTS");
+                ImGui::Spacing();
+                ImGui::Checkbox("Fog of War", &cfg->fogOfWarEnabled);
+                ImGui::Checkbox("Health Bars", &cfg->healthBarsVisible);
+
+                const char* losModes[] = {"Circular", "True LOS", "Permanent"};
+                ImGui::Combo("Line of Sight", &cfg->losMode, losModes, 3);
+            }
+            else if (optionsTab == 2) // Visuals
+            {
+                ImGui::Text("DISPLAY");
+                ImGui::Spacing();
+                ImGui::Checkbox("Fullscreen", &cfg->fullscreen);
+                if (sceneContext.window)
+                {
+                    if (ImGui::Button("Apply Fullscreen"))
+                    {
+                        sceneContext.sdl->setWindowFullscreen(sceneContext.window, cfg->fullscreen);
+                    }
+                }
+                ImGui::Spacing();
+
+                int w = static_cast<int>(cfg->windowWidth);
+                int h = static_cast<int>(cfg->windowHeight);
+                ImGui::InputInt("Width", &w);
+                ImGui::InputInt("Height", &h);
+                cfg->windowWidth = static_cast<unsigned int>(std::max(640, w));
+                cfg->windowHeight = static_cast<unsigned int>(std::max(480, h));
+                if (sceneContext.window && ImGui::Button("Apply Resolution"))
+                {
+                    sceneContext.sdl->setWindowSize(sceneContext.window, cfg->windowWidth, cfg->windowHeight);
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            if (ImGui::Button("Save & Close", ImVec2(menuW - 48.0f, 36.0f)))
+            {
+                cfg->save();
+                showOptionsOverlay = false;
+            }
+
+            ImGui::End();
+            ImGui::PopStyleVar(1);
+        }
     }
 
     void MainMenuScene::onMouseWheel(MouseWheelEvent event)
@@ -230,6 +344,10 @@ namespace rwe
             if (message == "Skirmish")
             {
                 goToSkirmishMenu();
+            }
+            else if (message == "Options")
+            {
+                showOptionsOverlay = true;
             }
         }
         else if (topic == "SKIRMISH")

@@ -31,6 +31,9 @@ namespace rwe
 
         AudioService::LoopToken bgm;
 
+        bool showOptionsOverlay{false};
+        int optionsTab{0}; // 0=Sound, 1=Interface, 2=Visuals
+
     public:
         MainMenuScene(
             const SceneContext& sceneContext,
