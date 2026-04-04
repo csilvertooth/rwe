@@ -43,6 +43,9 @@ namespace rwe
 
     void MainMenuScene::render()
     {
+        // Set GL viewport to full screen so TA panels scale to fill
+        sceneContext.graphics->setViewport(0, 0, sceneContext.viewport->width(), sceneContext.viewport->height());
+
         panelStack.back()->render(scaledUiRenderService);
 
         for (auto& e : dialogStack)

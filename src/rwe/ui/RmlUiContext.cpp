@@ -136,15 +136,23 @@ namespace rwe
         if (!context) return;
         if (!hasVisibleDocuments()) return;
 
-        // Save GL state that the game uses
+        // Save GL state
         GLint prevFramebuffer;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFramebuffer);
+        GLint prevViewport[4];
+        glGetIntegerv(GL_VIEWPORT, prevViewport);
         GLboolean prevDepthTest = glIsEnabled(GL_DEPTH_TEST);
         GLboolean prevCullFace = glIsEnabled(GL_CULL_FACE);
         GLboolean prevBlend = glIsEnabled(GL_BLEND);
 
-        // RmlUi needs default framebuffer and specific GL state
+        // Set up GL state for RmlUi rendering
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // Set viewport to full pixel dimensions
+        int pixW, pixH;
+        SDL_GetWindowSizeInPixels(window, &pixW, &pixH);
+        glViewport(0, 0, pixW, pixH);
+
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
@@ -156,6 +164,7 @@ namespace rwe
 
         // Restore GL state
         glBindFramebuffer(GL_FRAMEBUFFER, prevFramebuffer);
+        glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
         if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
         if (prevCullFace) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
         if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
