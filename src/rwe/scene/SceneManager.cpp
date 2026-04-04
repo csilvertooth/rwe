@@ -120,6 +120,12 @@ namespace rwe
             SDL_Event event;
             while (sdl->pollEvent(&event))
             {
+                // Route events to RmlUi first
+                if (rmlUiContext && rmlUiContext->processEvent(event))
+                {
+                    continue;
+                }
+
                 if (imGuiContext->processEvent(event))
                 {
                     continue;
@@ -139,6 +145,10 @@ namespace rwe
                 if (event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED && event.window.windowID == sdl->getWindowId(window))
                 {
                     viewport->setDimensions(event.window.data1, event.window.data2);
+                    if (rmlUiContext)
+                    {
+                        rmlUiContext->updateViewport(event.window.data1, event.window.data2);
+                    }
                     continue;
                 }
 
@@ -177,6 +187,13 @@ namespace rwe
             catch (const std::exception& ex)
             {
                 LOG_ERROR << "Exception in scene render: " << ex.what();
+            }
+
+            // Render RmlUi documents (after scene, before cursor)
+            if (rmlUiContext)
+            {
+                rmlUiContext->beginFrame();
+                rmlUiContext->render();
             }
 
             if (!imGuiContext->io->WantCaptureMouse)

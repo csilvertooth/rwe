@@ -1,10 +1,9 @@
-=== CRASH: signal 6 ===
-0   AnnihilationEngine                  0x000000010256c31c _ZL12crashHandleri + 60
+=== CRASH: signal 11 ===
+0   AnnihilationEngine                  0x000000010264ccb8 _ZL12crashHandleri + 60
 1   libsystem_platform.dylib            0x000000019c1d5764 _sigtramp + 56
-2   libsystem_pthread.dylib             0x000000019c1cb888 pthread_kill + 296
-3   libsystem_c.dylib                   0x000000019c0d0850 abort + 124
-4   AnnihilationEngine                  0x000000010256c1a4 _ZL16terminateHandlerv + 296
-5   libc++abi.dylib                     0x000000019c17ec2c _ZSt11__terminatePFvvE + 16
-6   libc++abi.dylib                     0x000000019c182648 __cxa_increment_exception_refcount + 0
-7   AnnihilationEngine                  0x000000010256c054 main + 13504
-8   dyld                                0x000000019be01d54 start + 7184
+2   AnnihilationEngine                  0x0000000102827de4 _ZN3GfxL12CreateShaderERjjPKc + 44
+3   AnnihilationEngine                  0x00000001028203a4 _ZN19RenderInterface_GL3C2Ev + 276
+4   AnnihilationEngine                  0x0000000102818228 _ZN3rwe12RmlUiContextC2EP10SDL_WindowP18SDL_GLContextState + 48
+5   AnnihilationEngine                  0x0000000102645074 _ZN3rwe3runERKNSt3__16vectorINS0_4__fs10filesystem4pathENS0_9allocatorIS4_EEEERKNS_11PathMappingERKNS0_8optionalINS_14GameParametersEEEjjbRKNS0_12basic_stringIcNS0_11char_traitsIcEENS5_IcEEEERNS_12GlobalConfigE + 1664
+6   AnnihilationEngine                  0x000000010264c0c4 main + 11928
+7   dyld                                0x000000019be01d54 start + 7184

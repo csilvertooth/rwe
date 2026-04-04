@@ -8,6 +8,7 @@
 #include <rwe/render/GraphicsContext.h>
 #include <rwe/rwe_time.h>
 #include <rwe/scene/Scene.h>
+#include <rwe/ui/RmlUiContext.h>
 #include <rwe/sdl/SdlContext.h>
 
 namespace rwe
@@ -26,6 +27,7 @@ namespace rwe
         GlobalConfig* globalConfig;
         UiRenderService uiRenderService;
         Viewport* const viewport;
+        RmlUiContext* rmlUiContext{nullptr};
         bool requestedExit;
         bool showDebugWindow{false};
         bool showDemoWindow{false};
@@ -38,6 +40,7 @@ namespace rwe
     public:
         explicit SceneManager(SdlContext* sdl, SDL_Window* window, GraphicsContext* graphics, TimeService* timeService, ImGuiContext* imGuiContext, CursorService* cursorService, GlobalConfig* globalConfig, UiRenderService&& uiRenderService, Viewport* viewport);
         void setNextScene(std::shared_ptr<Scene> scene);
+        void setRmlUiContext(RmlUiContext* ctx) { rmlUiContext = ctx; }
 
         void execute();
 

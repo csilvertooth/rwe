@@ -202,6 +202,8 @@ namespace rwe
         rwe::RmlUiContext rmlUiContext(window.get(), glContext.get());
         rmlUiContext.loadFont("assets/fonts/Orbitron-Regular.ttf");
         rmlUiContext.loadFont("assets/fonts/Orbitron-Bold.ttf");
+        // Test: load options document to verify rendering
+        rmlUiContext.loadDocument("assets/ui/options.rml");
 
         LOG_INFO << "Initializing virtual file system";
         CompositeVirtualFileSystem vfs;
@@ -276,6 +278,7 @@ namespace rwe
         sdlContext->hideCursor();
 
         SceneManager sceneManager(sdlContext, window.get(), &graphics, &timeService, &imGuiContext, &cursor, &globalConfig, UiRenderService(&graphics, &shaders, &viewport), &viewport);
+        sceneManager.setRmlUiContext(&rmlUiContext);
 
         LOG_INFO << "Loading side data";
         auto sideDataBytes = vfs.readFile("gamedata/SIDEDATA.TDF");
@@ -310,7 +313,8 @@ namespace rwe
             &timeService,
             &pathMapping,
             &globalConfig,
-            window.get());
+            window.get(),
+            &rmlUiContext);
 
         if (gameParameters)
         {

@@ -10,6 +10,7 @@
 #include <rwe/rwe_time.h>
 #include <rwe/scene/SceneManager.h>
 #include <rwe/sdl/SdlContext.h>
+#include <rwe/ui/RmlUiContext.h>
 #include <rwe/vfs/AbstractVirtualFileSystem.h>
 
 namespace rwe
@@ -33,6 +34,7 @@ namespace rwe
         const PathMapping* const pathMapping;
         const GlobalConfig* const globalConfig;
         SDL_Window* const window;
+        RmlUiContext* const rmlUi;
 
         SceneContext(
             SdlContext* const sdl,
@@ -50,7 +52,8 @@ namespace rwe
             TimeService* const timeService,
             const PathMapping* const pathMapping,
             const GlobalConfig* const globalConfig,
-            SDL_Window* const window = nullptr)
+            SDL_Window* const window = nullptr,
+            RmlUiContext* const rmlUi = nullptr)
             : sdl(sdl),
               viewport(viewportService),
               graphics(graphics),
@@ -66,7 +69,8 @@ namespace rwe
               timeService(timeService),
               pathMapping(pathMapping),
               globalConfig(globalConfig),
-              window(window)
+              window(window),
+              rmlUi(rmlUi)
         {
         }
     };
