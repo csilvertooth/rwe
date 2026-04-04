@@ -118,12 +118,14 @@ namespace rwe
     void RmlUiContext::beginFrame()
     {
         if (!context) return;
+        if (context->GetNumDocuments() == 0) return;
         context->Update();
     }
 
     void RmlUiContext::render()
     {
         if (!context) return;
+        if (context->GetNumDocuments() == 0) return;
 
         // Save GL state that the game uses
         GLint prevFramebuffer;
