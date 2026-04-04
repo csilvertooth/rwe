@@ -1472,7 +1472,12 @@ namespace rwe
             // Self-destruct selected units (5 second countdown = 150 ticks)
             for (const auto& unitId : selectedUnits)
             {
-                auto& unit = simulation.getUnitState(unitId);
+                auto unitOpt = simulation.tryGetUnitState(unitId);
+                if (!unitOpt)
+                {
+                    continue;
+                }
+                auto& unit = unitOpt->get();
                 if (!unit.selfDestructCountdown)
                 {
                     unit.selfDestructCountdown = GameTime(150);
