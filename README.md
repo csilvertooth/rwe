@@ -52,9 +52,21 @@ with Total Annihilation data files. This fork focuses on:
 | Reclaim via right-click | Done |
 | D-Gun manual fire (D key) | Done |
 
-### Phase 3 -- 3.9.02 Patch Parity [NEXT]
-Interceptor/shields, transports, naval, teleporters, stockpile weapons,
-cloaking, DamageModifier/ArmorType, area commands, MegaMap strategic overlay.
+### Phase 3 -- 3.9.02 Patch Parity [COMPLETE]
+| Feature | Status |
+|---------|--------|
+| Interceptor system (anti-missile) | Done |
+| Transport system (load/unload) | Done |
+| Naval waterline | Done |
+| Teleporter system | Done |
+| Kamikaze units | Done |
+| Cloaking system | Done |
+| OnOffable / Activation | Done |
+| DamageModifier / ArmorType | Done |
+| Area reclaim | Done |
+| Extended weapon tags (EdgeEffectiveness, Accuracy) | Done |
+| Extended FBI tags (30+ new tags) | Done |
+| MegaMap strategic overlay (scroll zoom) | Done |
 
 ### Phase 4 -- Modernization
 SDL3 GPU API rendering, GameNetworkingSockets networking, NAT traversal,
