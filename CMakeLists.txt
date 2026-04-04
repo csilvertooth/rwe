@@ -760,6 +760,7 @@ set(TEST_FILES
     src/rwe/network_util.test.cpp
     src/rwe/pathfinding/pathfinding_utils.test.cpp
     src/rwe/rc_gen_optional.h
+    src/rwe/sim/GameSimulation.test.cpp
     src/rwe/sim/GameHash_util.test.cpp
     src/rwe/sim/SimAngle.test.cpp
     src/rwe/sim/SimVector.test.cpp

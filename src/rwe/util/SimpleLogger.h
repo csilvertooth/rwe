@@ -161,7 +161,16 @@ namespace rwe
     inline SimpleLogger& getLogger()
     {
         auto& logger = globalLogger();
-        assert(logger && "Logger not initialized");
+        if (!logger)
+        {
+            // Provide a fallback logger that discards output when none is configured (e.g. in tests).
+            // Uses a file that is immediately closed so writes are no-ops.
+            static auto fallback = []() {
+                auto l = std::make_shared<SimpleLogger>("rwe_fallback.log", true);
+                return l;
+            }();
+            return *fallback;
+        }
         return *logger;
     }
 }

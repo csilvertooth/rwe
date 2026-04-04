@@ -107,9 +107,9 @@ endif()
 ## Phase 8: Testing Gaps
 
 **Critical untested areas:**
-- [src/rwe/sim/GameSimulation.cpp](src/rwe/sim/GameSimulation.cpp) — 2149 lines, core game logic, zero tests
-- [src/rwe/sim/UnitBehaviorService.cpp](src/rwe/sim/UnitBehaviorService.cpp) — Unit AI, zero tests  
-- [src/rwe/game/GameNetworkService.cpp](src/rwe/game/GameNetworkService.cpp) — Network protocol, zero tests
+- [src/rwe/sim/GameSimulation.cpp](src/rwe/sim/GameSimulation.cpp) — **DONE**: Added GameSimulation.test.cpp with tests for construction, addPlayer, tryGetFeatureDefinitionId, trySpawnFeature, tick, and Projectile::getDamage
+- [src/rwe/sim/UnitBehaviorService.cpp](src/rwe/sim/UnitBehaviorService.cpp) — Unit AI, needs tests (requires full unit/script definitions)
+- [src/rwe/game/GameNetworkService.cpp](src/rwe/game/GameNetworkService.cpp) — Network protocol, needs tests (requires async networking setup)
 
 **Approach:** Start with deterministic simulation tests (no rendering dependency). The sim layer is already separated from rendering, making it testable.
 
