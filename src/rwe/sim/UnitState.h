@@ -277,6 +277,11 @@ namespace rwe
         /** Heightmap position where visibility was last computed. */
         Point lastVisibilityPosition{-1, -1};
 
+        /** Cached cells this unit is covering with radar. */
+        std::vector<Point> currentRadarCells;
+        /** Heightmap position where radar was last computed. */
+        Point lastRadarPosition{-1, -1};
+
         /** Accumulated paralyzer/EMP damage. Unit is stunned when this exceeds maxHitPoints. */
         unsigned int stunDamage{0};
         /** If true, unit is currently paralyzed and cannot act. */

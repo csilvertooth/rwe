@@ -86,5 +86,11 @@ namespace rwe
         std::string category;
 
         unsigned int sightDistance{0};
+
+        unsigned int radarDistance{0};
+        unsigned int sonarDistance{0};
+        unsigned int radarDistanceJam{0};
+        unsigned int sonarDistanceJam{0};
+        bool stealth{false};
     };
 }

@@ -280,6 +280,12 @@ namespace rwe
         /** If true, use terrain height-based LOS. If false (default), use simple circular radius. */
         bool trueLOS{false};
 
+        /** Per-player radar detection grids. */
+        std::vector<PlayerRadarMap> radarMap;
+
+        /** Per-player sonar detection grids. */
+        std::vector<PlayerRadarMap> sonarMap;
+
         Grid<unsigned char> metalGrid;
 
         Grid<bool> geoGrid;
@@ -487,6 +493,10 @@ namespace rwe
         bool isPositionVisible(PlayerId viewer, const SimVector& position) const;
 
         bool isPositionExplored(PlayerId viewer, const SimVector& position) const;
+
+        void updateRadarMap();
+        void initRadarMap();
+        bool isUnitRadarVisible(PlayerId viewer, UnitId target) const;
 
         std::optional<FeatureDefinitionId> tryGetFeatureDefinitionId(const std::string& featureName) const;
 

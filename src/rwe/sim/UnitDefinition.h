@@ -140,5 +140,20 @@ namespace rwe
 
         /** Line-of-sight distance in world units. */
         unsigned int sightDistance{0};
+
+        /** Radar detection range in world units. 0 = no radar. */
+        unsigned int radarDistance{0};
+
+        /** Sonar detection range in world units. 0 = no sonar. */
+        unsigned int sonarDistance{0};
+
+        /** Radar jamming range in world units. 0 = no jamming. */
+        unsigned int radarDistanceJam{0};
+
+        /** Sonar jamming range in world units. 0 = no sonar jamming. */
+        unsigned int sonarDistanceJam{0};
+
+        /** If true, unit is invisible to enemy radar. */
+        bool stealth{false};
     };
 }

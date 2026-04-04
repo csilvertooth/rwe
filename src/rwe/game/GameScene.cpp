@@ -606,19 +606,34 @@ namespace rwe
 
         }
 
-        // draw minimap dots (only for visible or owned units)
+        // draw minimap dots (visible, radar-detected, or owned units)
         for (const auto& [unitId, unit] : simulation.units)
         {
-            if (fogOfWarEnabled && !unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
+            bool isOwned = unit.isOwnedBy(localPlayerId);
+            bool isLOSVisible = simulation.isUnitVisible(localPlayerId, unitId);
+            bool isRadarVisible = simulation.isUnitRadarVisible(localPlayerId, unitId);
+
+            if (fogOfWarEnabled && !isOwned && !isLOSVisible && !isRadarVisible)
             {
                 continue;
             }
+
             auto minimapPos = worldToMinimap * simVectorToFloat(unit.position);
             minimapPos.x = std::floor(minimapPos.x);
             minimapPos.y = std::floor(minimapPos.y);
             auto ownerId = unit.owner;
             auto colorIndex = getPlayer(ownerId).color;
-            chromeUiRenderService.drawSprite(minimapPos.x, minimapPos.y, *minimapDots->sprites[colorIndex.value]);
+
+            if (isOwned || isLOSVisible)
+            {
+                // Normal dot for LOS-visible or owned units
+                chromeUiRenderService.drawSprite(minimapPos.x, minimapPos.y, *minimapDots->sprites[colorIndex.value]);
+            }
+            else
+            {
+                // Radar blip — smaller/dimmer dot for radar-only detection
+                chromeUiRenderService.fillColor(minimapPos.x, minimapPos.y, 2.0f, 2.0f, Color(255, 100, 100, 180));
+            }
         }
         // highlight the minimap dot for the hovered unit
         if (hoveredUnit)

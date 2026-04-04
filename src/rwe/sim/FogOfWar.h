@@ -39,4 +39,23 @@ namespace rwe
 
     bool isCellVisible(const PlayerFogOfWar& fog, int x, int y);
     bool isCellExplored(const PlayerFogOfWar& fog, int x, int y);
+
+    /** Per-player radar detection grid. Simpler than fog — just tracks detection count. */
+    struct PlayerRadarMap
+    {
+        Grid<uint8_t> grid;
+
+        PlayerRadarMap(unsigned int width, unsigned int height)
+            : grid(width, height, 0)
+        {
+        }
+    };
+
+    /** Compute cells within a simple circular radius (no LOS blocking — radar goes through terrain). */
+    std::vector<Point> computeRadarCells(
+        unsigned int gridWidth, unsigned int gridHeight,
+        int cx, int cy,
+        int radiusCells);
+
+    bool isCellRadarDetected(const PlayerRadarMap& radar, int x, int y);
 }

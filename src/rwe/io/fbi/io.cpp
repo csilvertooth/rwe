@@ -99,6 +99,12 @@ namespace rwe
 
         tdf.readOrDefault("SightDistance", u.sightDistance);
 
+        tdf.readOrDefault("RadarDistance", u.radarDistance);
+        tdf.readOrDefault("SonarDistance", u.sonarDistance);
+        tdf.readOrDefault("RadarDistanceJam", u.radarDistanceJam);
+        tdf.readOrDefault("SonarDistanceJam", u.sonarDistanceJam);
+        tdf.readOrDefault("Stealth", u.stealth);
+
         return u;
     }
 }

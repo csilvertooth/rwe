@@ -153,4 +153,48 @@ namespace rwe
         }
         return fog.grid.get(x, y).explored;
     }
+
+    std::vector<Point> computeRadarCells(
+        unsigned int gridWidth, unsigned int gridHeight,
+        int cx, int cy,
+        int radiusCells)
+    {
+        std::vector<Point> result;
+        if (radiusCells <= 0)
+        {
+            return result;
+        }
+
+        auto gw = static_cast<int>(gridWidth);
+        auto gh = static_cast<int>(gridHeight);
+        int radiusSq = radiusCells * radiusCells;
+
+        for (int dy = -radiusCells; dy <= radiusCells; ++dy)
+        {
+            for (int dx = -radiusCells; dx <= radiusCells; ++dx)
+            {
+                if (dx * dx + dy * dy > radiusSq)
+                {
+                    continue;
+                }
+                int tx = cx + dx;
+                int ty = cy + dy;
+                if (tx < 0 || tx >= gw || ty < 0 || ty >= gh)
+                {
+                    continue;
+                }
+                result.emplace_back(tx, ty);
+            }
+        }
+        return result;
+    }
+
+    bool isCellRadarDetected(const PlayerRadarMap& radar, int x, int y)
+    {
+        if (x < 0 || x >= static_cast<int>(radar.grid.getWidth()) || y < 0 || y >= static_cast<int>(radar.grid.getHeight()))
+        {
+            return false;
+        }
+        return radar.grid.get(x, y) > 0;
+    }
 }

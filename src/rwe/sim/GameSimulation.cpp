@@ -1815,6 +1815,7 @@ namespace rwe
         updateProjectiles();
 
         updateFogOfWar();
+        updateRadarMap();
 
         processVictoryCondition();
 
@@ -1934,6 +1935,138 @@ namespace rwe
         }
         auto heightmapPos = terrain.worldToHeightmapCoordinate(position);
         return isCellExplored(fogOfWar[viewer.value], heightmapPos.x, heightmapPos.y);
+    }
+
+    void GameSimulation::initRadarMap()
+    {
+        auto gridWidth = terrain.getHeightMap().getWidth();
+        auto gridHeight = terrain.getHeightMap().getHeight();
+
+        radarMap.clear();
+        sonarMap.clear();
+        for (size_t i = 0; i < players.size(); ++i)
+        {
+            radarMap.emplace_back(gridWidth, gridHeight);
+            sonarMap.emplace_back(gridWidth, gridHeight);
+        }
+    }
+
+    void GameSimulation::updateRadarMap()
+    {
+        if (radarMap.empty())
+        {
+            return;
+        }
+
+        auto gridWidth = terrain.getHeightMap().getWidth();
+        auto gridHeight = terrain.getHeightMap().getHeight();
+
+        for (auto& [unitId, unit] : units)
+        {
+            if (unit.isDead())
+            {
+                continue;
+            }
+
+            const auto& unitDef = unitDefinitions.at(unit.unitType);
+
+            // Skip units with no radar/sonar
+            if (unitDef.radarDistance == 0 && unitDef.sonarDistance == 0)
+            {
+                continue;
+            }
+
+            auto heightmapPos = terrain.worldToHeightmapCoordinate(unit.position);
+            if (heightmapPos == unit.lastRadarPosition)
+            {
+                continue;
+            }
+
+            auto playerIndex = unit.owner.value;
+            if (playerIndex >= radarMap.size())
+            {
+                continue;
+            }
+
+            // Remove old radar coverage
+            if (!unit.currentRadarCells.empty())
+            {
+                for (const auto& p : unit.currentRadarCells)
+                {
+                    if (unitDef.radarDistance > 0 && radarMap[playerIndex].grid.get(p.x, p.y) > 0)
+                    {
+                        radarMap[playerIndex].grid.get(p.x, p.y)--;
+                    }
+                }
+            }
+
+            // Compute new radar cells
+            int radarRadiusCells = static_cast<int>(unitDef.radarDistance) / 16;
+            unit.currentRadarCells = computeRadarCells(gridWidth, gridHeight, heightmapPos.x, heightmapPos.y, radarRadiusCells);
+            unit.lastRadarPosition = heightmapPos;
+
+            // Add new radar coverage
+            for (const auto& p : unit.currentRadarCells)
+            {
+                radarMap[playerIndex].grid.get(p.x, p.y)++;
+            }
+        }
+    }
+
+    bool GameSimulation::isUnitRadarVisible(PlayerId viewer, UnitId target) const
+    {
+        auto targetOption = tryGetUnitState(target);
+        if (!targetOption)
+        {
+            return false;
+        }
+
+        const auto& targetUnit = targetOption->get();
+
+        if (targetUnit.isOwnedBy(viewer))
+        {
+            return true;
+        }
+
+        // Stealth units are invisible to radar
+        const auto& targetDef = unitDefinitions.at(targetUnit.unitType);
+        if (targetDef.stealth)
+        {
+            return false;
+        }
+
+        // Check if target is in a jammed area (enemy jammer nearby)
+        // Jamming: if the target's owner has a jammer unit whose range covers the target position,
+        // the target is hidden from radar. Wait — jamming works differently:
+        // The TARGET's owner's jammers hide the target from enemy radar.
+        // Check if any allied jammer covers this unit's position.
+        auto heightmapPos = terrain.worldToHeightmapCoordinate(targetUnit.position);
+        for (const auto& [_, otherUnit] : units)
+        {
+            if (!otherUnit.isOwnedBy(targetUnit.owner) || otherUnit.isDead())
+            {
+                continue;
+            }
+            const auto& otherDef = unitDefinitions.at(otherUnit.unitType);
+            if (otherDef.radarDistanceJam > 0)
+            {
+                auto jammerPos = terrain.worldToHeightmapCoordinate(otherUnit.position);
+                int jamRadius = static_cast<int>(otherDef.radarDistanceJam) / 16;
+                int dx = heightmapPos.x - jammerPos.x;
+                int dy = heightmapPos.y - jammerPos.y;
+                if (dx * dx + dy * dy <= jamRadius * jamRadius)
+                {
+                    return false; // jammed
+                }
+            }
+        }
+
+        if (viewer.value >= radarMap.size())
+        {
+            return false;
+        }
+
+        return isCellRadarDetected(radarMap[viewer.value], heightmapPos.x, heightmapPos.y);
     }
 
     std::optional<FeatureDefinitionId> GameSimulation::tryGetFeatureDefinitionId(const std::string& featureName) const

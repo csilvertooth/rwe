@@ -366,6 +366,11 @@ namespace rwe
         u.categories = splitCategories(fbi.category);
 
         u.sightDistance = fbi.sightDistance;
+        u.radarDistance = fbi.radarDistance;
+        u.sonarDistance = fbi.sonarDistance;
+        u.radarDistanceJam = fbi.radarDistanceJam;
+        u.sonarDistanceJam = fbi.sonarDistanceJam;
+        u.stealth = fbi.stealth;
 
         u.yardMapContainsGeo = false;
 

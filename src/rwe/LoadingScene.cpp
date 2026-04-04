@@ -233,6 +233,7 @@ namespace rwe
         }
 
         simulation.initFogOfWar();
+        simulation.initRadarMap();
 
         auto gameNetworkService = std::make_unique<GameNetworkService>(*localPlayerId, std::stoi(gameParameters.localNetworkPort), endpointInfos, playerCommandService.get());
 
