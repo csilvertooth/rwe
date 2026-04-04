@@ -1,6 +1,7 @@
 #include "CompositeVirtualFileSystem.h"
 #include <filesystem>
 #include <map>
+#include <rwe/util/SimpleLogger.h>
 #include <rwe/util/rwe_string.h>
 #include <rwe/vfs/DirectoryFileSystem.h>
 #include <rwe/vfs/HpiFileSystem.h>
@@ -139,6 +140,7 @@ namespace rwe
             auto ext = e.path().extension().string();
             if (toUpper(ext) == toUpper(extension))
             {
+                LOG_INFO << "Loading archive: " << e.path().string();
                 vfs.emplaceFileSystem<HpiFileSystem>(e.path().string());
             }
         }

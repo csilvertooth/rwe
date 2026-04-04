@@ -221,6 +221,7 @@ namespace rwe
         CompositeVirtualFileSystem vfs;
         for (const auto& path : searchPath)
         {
+            LOG_INFO << "Adding data path: " << path.string();
             addToVfs(vfs, path.string());
         }
 
