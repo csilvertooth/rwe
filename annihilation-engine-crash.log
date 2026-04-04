@@ -1,0 +1,10 @@
+=== CRASH: signal 6 ===
+0   AnnihilationEngine                  0x000000010256c31c _ZL12crashHandleri + 60
+1   libsystem_platform.dylib            0x000000019c1d5764 _sigtramp + 56
+2   libsystem_pthread.dylib             0x000000019c1cb888 pthread_kill + 296
+3   libsystem_c.dylib                   0x000000019c0d0850 abort + 124
+4   AnnihilationEngine                  0x000000010256c1a4 _ZL16terminateHandlerv + 296
+5   libc++abi.dylib                     0x000000019c17ec2c _ZSt11__terminatePFvvE + 16
+6   libc++abi.dylib                     0x000000019c182648 __cxa_increment_exception_refcount + 0
+7   AnnihilationEngine                  0x000000010256c054 main + 13504
+8   dyld                                0x000000019be01d54 start + 7184

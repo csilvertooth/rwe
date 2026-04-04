@@ -3232,8 +3232,14 @@ namespace rwe
 
         processPlayerCommands(*playerCommands);
 
-        try {
-        simulation.tick();
+        try
+        {
+            simulation.tick();
+        }
+        catch (const std::exception& ex)
+        {
+            LOG_ERROR << "Exception in simulation.tick(): " << ex.what();
+        }
 
         auto gameHash = simulation.computeHash();
         playerCommandService->pushHash(localPlayerId, gameHash);
@@ -3244,13 +3250,24 @@ namespace rwe
             *stateLogStream << dumpJson(simulation) << std::endl;
         }
 
-        } catch (const std::exception& ex) {
-            // Log but don't crash on simulation errors
+        try
+        {
+            processSimEvents();
+        }
+        catch (const std::exception& ex)
+        {
+            LOG_ERROR << "Exception in processSimEvents(): " << ex.what();
+            simulation.events.clear();
         }
 
-        processSimEvents();
-
-        updateProjectiles();
+        try
+        {
+            updateProjectiles();
+        }
+        catch (const std::exception& ex)
+        {
+            LOG_ERROR << "Exception in updateProjectiles(): " << ex.what();
+        }
 
         updateFlashes();
 
@@ -3697,7 +3714,6 @@ namespace rwe
     {
         for (const auto& event : simulation.events)
         {
-            try {
             match(
                 event,
                 [&](const FireWeaponEvent& e) {
@@ -3854,10 +3870,6 @@ namespace rwe
                             break;
                     }
                 });
-            } catch (const std::exception& ex) {
-                // Skip events that reference missing definitions
-                // (can happen during mass unit death cascades)
-            }
         }
 
         simulation.events.clear();

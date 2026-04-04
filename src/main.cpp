@@ -522,8 +522,59 @@ static void crashHandler(int sig)
     _exit(1);
 }
 
+static void terminateHandler()
+{
+    fprintf(stderr, "\n=== TERMINATE CALLED (unhandled exception) ===\n");
+    auto ex = std::current_exception();
+    if (ex)
+    {
+        try
+        {
+            std::rethrow_exception(ex);
+        }
+        catch (const std::exception& e)
+        {
+            fprintf(stderr, "Exception: %s\n", e.what());
+        }
+        catch (...)
+        {
+            fprintf(stderr, "Unknown exception\n");
+        }
+    }
+
+    void* frames[64];
+    int count = backtrace(frames, 64);
+    fprintf(stderr, "Stack trace:\n");
+    backtrace_symbols_fd(frames, count, STDERR_FILENO);
+
+    FILE* f = fopen("annihilation-engine-crash.log", "w");
+    if (f)
+    {
+        if (ex)
+        {
+            try { std::rethrow_exception(ex); }
+            catch (const std::exception& e) { fprintf(f, "Exception: %s\n", e.what()); }
+            catch (...) { fprintf(f, "Unknown exception\n"); }
+        }
+        fprintf(f, "\nStack trace:\n");
+        char** symbols = backtrace_symbols(frames, count);
+        if (symbols)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                fprintf(f, "%s\n", symbols[i]);
+            }
+            free(symbols);
+        }
+        fclose(f);
+    }
+
+    abort();
+}
+
 int main(int argc, char* argv[])
 {
+    std::set_terminate(terminateHandler);
     signal(SIGSEGV, crashHandler);
     signal(SIGABRT, crashHandler);
     signal(SIGBUS, crashHandler);
@@ -643,29 +694,7 @@ int main(int argc, char* argv[])
     }
     catch (const std::exception& e)
     {
-        // Write crash details to log file
         std::string crashMsg = std::string("Exception: ") + e.what();
-        FILE* f = fopen("annihilation-engine-crash.log", "w");
-        if (f)
-        {
-            fprintf(f, "%s\n", crashMsg.c_str());
-
-            // Also dump a stack trace
-            void* frames[64];
-            int count = backtrace(frames, 64);
-            char** symbols = backtrace_symbols(frames, count);
-            if (symbols)
-            {
-                fprintf(f, "\nStack trace:\n");
-                for (int i = 0; i < count; ++i)
-                {
-                    fprintf(f, "%s\n", symbols[i]);
-                }
-                free(symbols);
-            }
-            fclose(f);
-        }
-
         fprintf(stderr, "CRASH: %s\n", crashMsg.c_str());
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical Error", crashMsg.c_str(), nullptr);
         return 1;
