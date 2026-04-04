@@ -256,6 +256,15 @@ namespace rwe
         sceneContext.audioService->reserveChannels(reservedChannelsCount);
         gameNetworkService->start();
 
+        // Apply saved settings from config
+        if (sceneContext.globalConfig)
+        {
+            fogOfWarEnabled = sceneContext.globalConfig->fogOfWarEnabled;
+            simulation.trueLOS = sceneContext.globalConfig->trueLOS;
+            healthBarsVisible = sceneContext.globalConfig->healthBarsVisible;
+            gameSpeed = sceneContext.globalConfig->gameSpeed;
+        }
+
         recreateWorldRenderTextures();
 
         // Initialize fog of war texture with GL_LINEAR for smooth edges
@@ -1653,6 +1662,28 @@ namespace rwe
             {
                 sceneContext.sdl->setWindowFullscreen(sceneContext.window, isFullscreen);
             }
+        }
+
+        ImGui::Spacing();
+
+        // Save settings button
+        if (ImGui::Button("Save Settings", ImVec2(menuW - 40.0f, 30.0f)))
+        {
+            auto* cfg = const_cast<GlobalConfig*>(sceneContext.globalConfig);
+            cfg->fogOfWarEnabled = fogOfWarEnabled;
+            cfg->trueLOS = simulation.trueLOS;
+            cfg->healthBarsVisible = healthBarsVisible;
+            cfg->gameSpeed = gameSpeed;
+            if (sceneContext.window)
+            {
+                auto flags = SDL_GetWindowFlags(sceneContext.window);
+                cfg->fullscreen = (flags & SDL_WINDOW_FULLSCREEN) != 0;
+                int w, h;
+                sceneContext.sdl->getWindowSize(sceneContext.window, &w, &h);
+                cfg->windowWidth = w;
+                cfg->windowHeight = h;
+            }
+            cfg->save();
         }
 
         ImGui::Spacing();

@@ -625,7 +625,11 @@ int main(int argc, char* argv[])
 
         try
         {
+            // Load saved settings, then apply CLI overrides
+            fs::path settingsPath(*localDataPath);
+            settingsPath /= "settings.cfg";
             rwe::GlobalConfig config;
+            config.loadFromFile(settingsPath.string());
             config.leftClickInterfaceMode = args.getString("interface-mode", "left-click") != "right-click";
             std::optional<rwe::GameParameters> gameParameters;
             if (args.contains("map"))
@@ -663,9 +667,10 @@ int main(int argc, char* argv[])
                 gameDataPaths.emplace_back(*localDataPath) /= "Data";
             }
 
-            auto screenWidth = args.getUint("width", 1280);
-            auto screenHeight = args.getUint("height", 960);
-            auto fullscreen = args.getBool("fullscreen");
+            // CLI args override saved settings
+            auto screenWidth = args.getUint("width", config.windowWidth);
+            auto screenHeight = args.getUint("height", config.windowHeight);
+            auto fullscreen = args.getBool("fullscreen") || config.fullscreen;
 
             auto pathMapping = constructDefaultPathMapping();
             pathMapping.ai = args.getString("dir-ai", "ai");

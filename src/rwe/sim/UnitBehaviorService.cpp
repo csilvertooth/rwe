@@ -2031,7 +2031,7 @@ namespace rwe
     {
         auto targetHeight = getTargetAltitude(*sim, unitInfo.state->position.x, unitInfo.state->position.z, *unitInfo.definition);
 
-        unitInfo.state->position.y = rweMin(unitInfo.state->position.y + 1_ss, targetHeight);
+        unitInfo.state->position.y = rweMin(unitInfo.state->position.y + 3_ss, targetHeight);
 
         return unitInfo.state->position.y == targetHeight;
     }
