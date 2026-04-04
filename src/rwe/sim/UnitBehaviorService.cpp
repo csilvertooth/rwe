@@ -6,6 +6,7 @@
 #include <rwe/sim/cob.h>
 #include <rwe/sim/movement.h>
 #include <rwe/util/Index.h>
+#include <rwe/util/SimpleLogger.h>
 #include <rwe/util/match.h>
 
 namespace rwe
@@ -46,9 +47,11 @@ namespace rwe
                     auto unitOpt = sim.tryGetUnitState(cell.buildingInfo->unit);
                     if (unitOpt)
                     {
-                        const auto& bldgDef = sim.unitDefinitions.at(unitOpt->get().unitType);
-                        const auto& modelDef = sim.unitModelDefinitions.at(bldgDef.objectName);
-                        obstacleTop = rweMax(obstacleTop, unitOpt->get().position.y + modelDef.height);
+                        const auto* bldgDef = sim.tryGetUnitDefinition(unitOpt->get().unitType);
+                        if (!bldgDef) { continue; }
+                        const auto* modelDef = sim.tryGetUnitModelDefinition(bldgDef->objectName);
+                        if (!modelDef) { continue; }
+                        obstacleTop = rweMax(obstacleTop, unitOpt->get().position.y + modelDef->height);
                     }
                 }
             }
@@ -65,14 +68,15 @@ namespace rwe
     void UnitBehaviorService::onCreate(UnitId unitId)
     {
         auto& unit = sim->getUnitState(unitId);
-        const auto& unitDefinition = sim->unitDefinitions.at(unit.unitType);
+        const auto* unitDefinition = sim->tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return; }
 
         unit.cobEnvironment->createThread("Create", std::vector<int>());
 
         // set speed for metal extractors
-        if (unitDefinition.extractsMetal != Metal(0))
+        if (unitDefinition->extractsMetal != Metal(0))
         {
-            auto footprint = sim->computeFootprintRegion(unit.position, unitDefinition.movementCollisionInfo);
+            auto footprint = sim->computeFootprintRegion(unit.position, unitDefinition->movementCollisionInfo);
             auto metalValue = sim->metalGrid.accumulate(sim->metalGrid.clipRegion(footprint), 0u, std::plus<>());
             unit.cobEnvironment->createThread("SetSpeed", {static_cast<int>(metalValue)});
         }
@@ -100,8 +104,9 @@ namespace rwe
 
         for (auto& [id, unit] : sim->units)
         {
-            const auto& unitDefinition = sim->unitDefinitions.at(unit.unitType);
-            if (unitDefinition.windGenerator != Energy(0))
+            const auto* unitDefinition = sim->tryGetUnitDefinition(unit.unitType);
+            if (!unitDefinition) { continue; }
+            if (unitDefinition->windGenerator != Energy(0))
             {
                 unit.cobEnvironment->createThread("SetSpeed", {cobWindSpeed});
                 unit.cobEnvironment->createThread("SetDirection", {cobWindDirection});
@@ -487,8 +492,8 @@ namespace rwe
                     }
 
                     // Category-based targeting filter
-                    const auto& otherUnitDef = sim->unitDefinitions.at(otherUnit.unitType);
-                    if (!matchesTargetCategories(weaponDefinition, otherUnitDef))
+                    const auto* otherUnitDef = sim->tryGetUnitDefinition(otherUnit.unitType);
+                    if (!otherUnitDef || !matchesTargetCategories(weaponDefinition, *otherUnitDef))
                     {
                         continue;
                     }
@@ -639,8 +644,9 @@ namespace rwe
         }
 
         // Air units can only fire when airborne
-        const auto& unitDefinition = sim->unitDefinitions.at(unit.unitType);
-        if (unitDefinition.canFly)
+        const auto* unitDefinition = sim->tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return; }
+        if (unitDefinition->canFly)
         {
             if (auto airPhysics = std::get_if<UnitPhysicsInfoAir>(&unit.physics))
             {
@@ -650,7 +656,7 @@ namespace rwe
                 }
 
                 // Fighters (non-hoverAttack) can only fire when heading is roughly aligned with target
-                if (!unitDefinition.hoverAttack)
+                if (!unitDefinition->hoverAttack)
                 {
                     auto toTarget = fireInfo->targetPosition - unit.position;
                     auto targetAngle = UnitState::toRotation(toTarget);
@@ -1299,9 +1305,10 @@ namespace rwe
                 }
 
                 // In range — drain HP and give resources
-                const auto& targetDef = sim->unitDefinitions.at(target.unitType);
-                auto metalPerTick = Metal(static_cast<float>(targetDef.buildCostMetal.value) * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetDef.buildTime));
-                auto energyPerTick = Energy(static_cast<float>(targetDef.buildCostEnergy.value) * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetDef.buildTime));
+                const auto* targetDef = sim->tryGetUnitDefinition(target.unitType);
+                if (!targetDef) { return true; }
+                auto metalPerTick = Metal(static_cast<float>(targetDef->buildCostMetal.value) * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetDef->buildTime));
+                auto energyPerTick = Energy(static_cast<float>(targetDef->buildCostEnergy.value) * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetDef->buildTime));
                 sim->addResourceDelta(unitInfo.id, energyPerTick, metalPerTick);
 
                 if (target.hitPoints > unitInfo.definition->workerTimePerTick)
@@ -1347,10 +1354,11 @@ namespace rwe
         }
 
         // In range — gradually capture (drain HP, then convert when low)
-        const auto& targetDef = sim->unitDefinitions.at(target.unitType);
+        const auto* targetDef = sim->tryGetUnitDefinition(target.unitType);
+        if (!targetDef) { return true; }
         auto captureRate = unitInfo.definition->workerTimePerTick;
 
-        if (target.hitPoints > targetDef.maxHitPoints / 4)
+        if (target.hitPoints > targetDef->maxHitPoints / 4)
         {
             // Drain HP during capture
             if (target.hitPoints > captureRate)
@@ -1366,7 +1374,7 @@ namespace rwe
         {
             // Below 25% HP — captured! Change owner
             target.owner = unitInfo.state->owner;
-            target.hitPoints = targetDef.maxHitPoints / 2; // restore some HP
+            target.hitPoints = targetDef->maxHitPoints / 2; // restore some HP
             return true;
         }
 
@@ -1422,11 +1430,12 @@ namespace rwe
                 }
 
                 auto& targetUnit = targetUnitOption->get();
-                const auto& targetUnitDefinition = sim->unitDefinitions.at(targetUnit.unitType);
+                const auto* targetUnitDefinition = sim->tryGetUnitDefinition(targetUnit.unitType);
+                if (!targetUnitDefinition) { return false; }
 
                 if (targetUnit.unitType != unitType)
                 {
-                    if (targetUnit.isBeingBuilt(targetUnitDefinition) && !targetUnit.isDead())
+                    if (targetUnit.isBeingBuilt(*targetUnitDefinition) && !targetUnit.isDead())
                     {
                         sim->quietlyKillUnit(state.targetUnit->first);
                     }
@@ -1442,7 +1451,7 @@ namespace rwe
                     return true;
                 }
 
-                if (!targetUnit.isBeingBuilt(targetUnitDefinition))
+                if (!targetUnit.isBeingBuilt(*targetUnitDefinition))
                 {
                     if (unitInfo.state->orders.empty())
                     {
@@ -1459,7 +1468,7 @@ namespace rwe
                     return true;
                 }
 
-                if (targetUnitDefinition.floater || targetUnitDefinition.canHover)
+                if (targetUnitDefinition->floater || targetUnitDefinition->canHover)
                 {
                     buildPieceInfo.position.y = rweMax(buildPieceInfo.position.y, sim->terrain.getSeaLevel());
                 }
@@ -1467,11 +1476,11 @@ namespace rwe
                 tryApplyMovementToPosition(sim->getUnitInfo(state.targetUnit->first), buildPieceInfo.position);
                 targetUnit.rotation = buildPieceInfo.rotation;
 
-                auto costs = targetUnit.getBuildCostInfo(targetUnitDefinition, unitInfo.definition->workerTimePerTick);
+                auto costs = targetUnit.getBuildCostInfo(*targetUnitDefinition, unitInfo.definition->workerTimePerTick);
                 auto gotResources = sim->addResourceDelta(
                     unitInfo.id,
-                    -Energy(targetUnitDefinition.buildCostEnergy.value * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetUnitDefinition.buildTime)),
-                    -Metal(targetUnitDefinition.buildCostMetal.value * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetUnitDefinition.buildTime)),
+                    -Energy(targetUnitDefinition->buildCostEnergy.value * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetUnitDefinition->buildTime)),
+                    -Metal(targetUnitDefinition->buildCostMetal.value * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetUnitDefinition->buildTime)),
                     -costs.energyCost,
                     -costs.metalCost);
 
@@ -1483,11 +1492,11 @@ namespace rwe
                 }
                 state.targetUnit->second = getNanoPoint(unitInfo.id);
 
-                if (targetUnit.addBuildProgress(targetUnitDefinition, unitInfo.definition->workerTimePerTick))
+                if (targetUnit.addBuildProgress(*targetUnitDefinition, unitInfo.definition->workerTimePerTick))
                 {
                     sim->events.push_back(UnitCompleteEvent{state.targetUnit->first});
 
-                    if (targetUnitDefinition.activateWhenBuilt)
+                    if (targetUnitDefinition->activateWhenBuilt)
                     {
                         sim->activateUnit(state.targetUnit->first);
                     }
@@ -1542,7 +1551,12 @@ namespace rwe
     {
         auto& unit = sim->getUnitState(id);
 
-        const auto& pieceName = unit.cobEnvironment->_script->pieces.at(pieceId);
+        if (pieceId >= unit.cobEnvironment->_script->pieces.size())
+        {
+            LOG_ERROR << "getPieceLocalPosition: pieceId " << pieceId << " out of range for unit " << id.value;
+            return SimVector(0_ss, 0_ss, 0_ss);
+        }
+        const auto& pieceName = unit.cobEnvironment->_script->pieces[pieceId];
         auto pieceTransform = sim->getUnitPieceLocalTransform(id, pieceName);
 
         return pieceTransform * SimVector(0_ss, 0_ss, 0_ss);
@@ -1559,7 +1573,12 @@ namespace rwe
     {
         auto& unit = sim->getUnitState(id);
 
-        const auto& pieceName = unit.cobEnvironment->_script->pieces.at(pieceId);
+        if (pieceId >= unit.cobEnvironment->_script->pieces.size())
+        {
+            LOG_ERROR << "getPieceXZRotation: pieceId " << pieceId << " out of range for unit " << id.value;
+            return SimAngle(0);
+        }
+        const auto& pieceName = unit.cobEnvironment->_script->pieces[pieceId];
         auto pieceTransform = sim->getUnitPieceLocalTransform(id, pieceName);
 
         auto mat = unit.getTransform() * pieceTransform;
@@ -1715,8 +1734,9 @@ namespace rwe
             }
         }
 
-        const auto& targetUnitDefinition = sim->unitDefinitions.at(unitType);
-        auto footprintRect = sim->computeFootprintRegion(position, targetUnitDefinition.movementCollisionInfo);
+        const auto* targetUnitDefinition = sim->tryGetUnitDefinition(unitType);
+        if (!targetUnitDefinition) { return UnitCreationStatusPending(); }
+        auto footprintRect = sim->computeFootprintRegion(position, targetUnitDefinition->movementCollisionInfo);
         if (navigateTo(unitInfo, footprintRect))
         {
             // TODO: add an additional distance check here -- we may have done the best
@@ -1783,13 +1803,19 @@ namespace rwe
     bool UnitBehaviorService::deployBuildArm(UnitInfo unitInfo, UnitId targetUnitId)
     {
         auto targetUnitRef = sim->tryGetUnitState(targetUnitId);
-        if (!targetUnitRef || targetUnitRef->get().isDead() || !targetUnitRef->get().isBeingBuilt(sim->unitDefinitions.at(targetUnitRef->get().unitType)))
+        if (!targetUnitRef)
+        {
+            changeState(*unitInfo.state, UnitBehaviorStateIdle());
+            return true;
+        }
+        const auto* targetUnitDefCheck = sim->tryGetUnitDefinition(targetUnitRef->get().unitType);
+        if (!targetUnitDefCheck || targetUnitRef->get().isDead() || !targetUnitRef->get().isBeingBuilt(*targetUnitDefCheck))
         {
             changeState(*unitInfo.state, UnitBehaviorStateIdle());
             return true;
         }
         auto& targetUnit = targetUnitRef->get();
-        const auto& targetUnitDefinition = sim->unitDefinitions.at(targetUnit.unitType);
+        const auto* targetUnitDefinition = targetUnitDefCheck;
 
         return match(
             unitInfo.state->behaviourState,
@@ -1807,11 +1833,11 @@ namespace rwe
                     return false;
                 }
 
-                auto costs = targetUnit.getBuildCostInfo(targetUnitDefinition, unitInfo.definition->workerTimePerTick);
+                auto costs = targetUnit.getBuildCostInfo(*targetUnitDefinition, unitInfo.definition->workerTimePerTick);
                 auto gotResources = sim->addResourceDelta(
                     unitInfo.id,
-                    -Energy(targetUnitDefinition.buildCostEnergy.value * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetUnitDefinition.buildTime)),
-                    -Metal(targetUnitDefinition.buildCostMetal.value * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetUnitDefinition.buildTime)),
+                    -Energy(targetUnitDefinition->buildCostEnergy.value * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetUnitDefinition->buildTime)),
+                    -Metal(targetUnitDefinition->buildCostMetal.value * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetUnitDefinition->buildTime)),
                     -costs.energyCost,
                     -costs.metalCost);
 
@@ -1823,11 +1849,11 @@ namespace rwe
                 }
                 buildingState.nanoParticleOrigin = getNanoPoint(unitInfo.id);
 
-                if (targetUnit.addBuildProgress(targetUnitDefinition, unitInfo.definition->workerTimePerTick))
+                if (targetUnit.addBuildProgress(*targetUnitDefinition, unitInfo.definition->workerTimePerTick))
                 {
                     sim->events.push_back(UnitCompleteEvent{buildingState.targetUnit});
 
-                    if (targetUnitDefinition.activateWhenBuilt)
+                    if (targetUnitDefinition->activateWhenBuilt)
                     {
                         sim->activateUnit(buildingState.targetUnit);
                     }

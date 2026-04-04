@@ -57,32 +57,36 @@ namespace rwe
     {
         auto unitOpt = sim.tryGetUnitState(unitId);
         if (!unitOpt) return false;
-        const auto& unitDefinition = sim.unitDefinitions.at(unitOpt->get().unitType);
-        return unitDefinition.canAttack;
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unitOpt->get().unitType);
+        if (!unitDefinition) { return false; }
+        return unitDefinition->canAttack;
     }
 
     bool unitCanMove(const GameSimulation& sim, UnitId unitId)
     {
         auto unitOpt = sim.tryGetUnitState(unitId);
         if (!unitOpt) return false;
-        const auto& unitDefinition = sim.unitDefinitions.at(unitOpt->get().unitType);
-        return unitDefinition.canMove;
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unitOpt->get().unitType);
+        if (!unitDefinition) { return false; }
+        return unitDefinition->canMove;
     }
 
     bool unitCanGuard(const GameSimulation& sim, UnitId unitId)
     {
         auto unitOpt = sim.tryGetUnitState(unitId);
         if (!unitOpt) return false;
-        const auto& unitDefinition = sim.unitDefinitions.at(unitOpt->get().unitType);
-        return unitDefinition.canGuard;
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unitOpt->get().unitType);
+        if (!unitDefinition) { return false; }
+        return unitDefinition->canGuard;
     }
 
     bool unitIsBuilder(const GameSimulation& sim, UnitId unitId)
     {
         auto unitOpt = sim.tryGetUnitState(unitId);
         if (!unitOpt) return false;
-        const auto& unitDefinition = sim.unitDefinitions.at(unitOpt->get().unitType);
-        return unitDefinition.builder;
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unitOpt->get().unitType);
+        if (!unitDefinition) { return false; }
+        return unitDefinition->builder;
     }
 
     bool unitIsBuilder(const GameSimulation& sim, std::optional<UnitId> singleSelectedUnit)
@@ -90,24 +94,27 @@ namespace rwe
         if (!singleSelectedUnit) return false;
         auto unitOpt = sim.tryGetUnitState(*singleSelectedUnit);
         if (!unitOpt) return false;
-        const auto& unitDefinition = sim.unitDefinitions.at(unitOpt->get().unitType);
-        return unitDefinition.builder;
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unitOpt->get().unitType);
+        if (!unitDefinition) { return false; }
+        return unitDefinition->builder;
     }
 
     bool unitIsBeingBuilt(const GameSimulation& sim, UnitId unitId)
     {
         auto unitOpt = sim.tryGetUnitState(unitId);
         if (!unitOpt) return false;
-        const auto& unitDefinition = sim.unitDefinitions.at(unitOpt->get().unitType);
-        return unitOpt->get().isBeingBuilt(unitDefinition);
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unitOpt->get().unitType);
+        if (!unitDefinition) { return false; }
+        return unitOpt->get().isBeingBuilt(*unitDefinition);
     }
 
     bool unitIsSelectableBy(const GameSimulation& sim, UnitId unitId, PlayerId playerId)
     {
         auto unitOpt = sim.tryGetUnitState(unitId);
         if (!unitOpt) return false;
-        const auto& unitDefinition = sim.unitDefinitions.at(unitOpt->get().unitType);
-        return unitOpt->get().isSelectableBy(unitDefinition, playerId);
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unitOpt->get().unitType);
+        if (!unitDefinition) { return false; }
+        return unitOpt->get().isSelectableBy(*unitDefinition, playerId);
     }
 
     bool unitIsOwnedByPlayerAndIsBuilder(const GameSimulation& sim, PlayerId playerId, std::optional<UnitId> singleSelectedUnit)
@@ -116,8 +123,9 @@ namespace rwe
         auto unitOpt = sim.tryGetUnitState(*singleSelectedUnit);
         if (!unitOpt) return false;
         if (!unitOpt->get().isOwnedBy(playerId)) return false;
-        const auto& unitDefinition = sim.unitDefinitions.at(unitOpt->get().unitType);
-        return unitDefinition.builder;
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unitOpt->get().unitType);
+        if (!unitDefinition) { return false; }
+        return unitDefinition->builder;
     }
 
     bool shouldShowAllBuildBoxes(const GameSimulation& sim, PlayerId localPlayerId, std::optional<UnitId> singleSelectedUnit, std::optional<UnitId> hoveredUnit)
@@ -330,17 +338,17 @@ namespace rwe
         auto topPanelBackground = sceneContext.textureService->tryGetGafEntry("anims/" + intGafName + ".GAF", "PANELTOP");
         auto bottomPanelBackground = sceneContext.textureService->tryGetGafEntry("anims/" + intGafName + ".GAF", "PANELBOT");
         float topXBuffer = GuiSizeLeft;
-        if (topPanelBackground)
+        if (topPanelBackground && !(*topPanelBackground)->sprites.empty())
         {
-            const auto& sprite = *(*topPanelBackground)->sprites.at(0);
+            const auto& sprite = *(*topPanelBackground)->sprites[0];
             chromeUiRenderService.drawSpriteAbs(topXBuffer, 0, sprite);
             topXBuffer += sprite.bounds.width();
         }
-        if (bottomPanelBackground)
+        if (bottomPanelBackground && !(*bottomPanelBackground)->sprites.empty())
         {
             while (topXBuffer < sceneContext.viewport->width())
             {
-                const auto& sprite = *(*bottomPanelBackground)->sprites.at(0);
+                const auto& sprite = *(*bottomPanelBackground)->sprites[0];
                 chromeUiRenderService.drawSpriteAbs(topXBuffer, 0.0f, sprite);
                 topXBuffer += sprite.bounds.width();
             }
@@ -350,8 +358,11 @@ namespace rwe
         if (logos)
         {
             auto playerColorIndex = getPlayer(localPlayerId).color;
-            const auto& rect = localSideData.logo.toDiscreteRect();
-            chromeUiRenderService.drawSpriteAbs(rect.x, rect.y, rect.width, rect.height, *(*logos)->sprites.at(playerColorIndex.value));
+            if (playerColorIndex.value < (*logos)->sprites.size())
+            {
+                const auto& rect = localSideData.logo.toDiscreteRect();
+                chromeUiRenderService.drawSpriteAbs(rect.x, rect.y, rect.width, rect.height, *(*logos)->sprites[playerColorIndex.value]);
+            }
         }
 
         // draw energy bar
@@ -424,11 +435,11 @@ namespace rwe
 
         // render bottom bar
         float bottomXBuffer = GuiSizeLeft;
-        if (bottomPanelBackground)
+        if (bottomPanelBackground && !(*bottomPanelBackground)->sprites.empty())
         {
             while (bottomXBuffer < sceneContext.viewport->width())
             {
-                const auto& sprite = *(*bottomPanelBackground)->sprites.at(0);
+                const auto& sprite = *(*bottomPanelBackground)->sprites[0];
                 chromeUiRenderService.drawSpriteAbs(bottomXBuffer, worldViewport.bottom(), sprite);
                 bottomXBuffer += sprite.bounds.width();
             }
@@ -438,25 +449,32 @@ namespace rwe
         if (hoveredUnit)
         {
             const auto& unit = getUnit(*hoveredUnit);
-            const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
+            const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+            if (!unitDefinition) { /* skip hovered unit info */ }
+            else
+            {
             if (logos)
             {
-                const auto& rect = localSideData.logo2.toDiscreteRect();
-                const auto& color = *(*logos)->sprites.at(getPlayer(unit.owner).color.value);
-                chromeUiRenderService.drawSpriteAbs(rect.x, extraBottom + rect.y, rect.width, rect.height, color);
+                auto colorIdx = getPlayer(unit.owner).color.value;
+                if (colorIdx < (*logos)->sprites.size())
+                {
+                    const auto& rect = localSideData.logo2.toDiscreteRect();
+                    const auto& color = *(*logos)->sprites[colorIdx];
+                    chromeUiRenderService.drawSpriteAbs(rect.x, extraBottom + rect.y, rect.width, rect.height, color);
+                }
             }
 
             {
                 const auto& rect = localSideData.unitName;
                 const auto& playerName = getPlayer(unit.owner).name;
-                const auto& text = unitDefinition.showPlayerName && playerName ? *playerName : unitDefinition.unitName;
+                const auto& text = unitDefinition->showPlayerName && playerName ? *playerName : unitDefinition->unitName;
                 chromeUiRenderService.drawTextCenteredX(rect.x1, extraBottom + rect.y1, text, *guiFont);
             }
 
-            if (unit.isOwnedBy(localPlayerId) || !unitDefinition.hideDamage)
+            if (unit.isOwnedBy(localPlayerId) || !unitDefinition->hideDamage)
             {
                 const auto& rect = localSideData.damageBar.toDiscreteRect();
-                chromeUiRenderService.drawHealthBar2(rect.x, extraBottom + rect.y, rect.width, rect.height, static_cast<float>(unit.hitPoints) / static_cast<float>(unitDefinition.maxHitPoints));
+                chromeUiRenderService.drawHealthBar2(rect.x, extraBottom + rect.y, rect.width, rect.height, static_cast<float>(unit.hitPoints) / static_cast<float>(unitDefinition->maxHitPoints));
             }
 
             if (unit.isOwnedBy(localPlayerId))
@@ -487,6 +505,7 @@ namespace rwe
                     chromeUiRenderService.drawTextCenteredX(rect.x1, extraBottom + rect.y1, text, *guiFont);
                 }
             }
+            } // else (unitDefinition valid)
         }
         else if (hoveredFeature)
         {
@@ -515,17 +534,19 @@ namespace rwe
         }
         else if (auto hoveredBuildButtonUnitType = getUnitBuildButtonUnderCursor(); hoveredBuildButtonUnitType)
         {
-            const auto& unitDefinition = simulation.unitDefinitions.at(*hoveredBuildButtonUnitType);
-
+            const auto* unitDefinition = simulation.tryGetUnitDefinition(*hoveredBuildButtonUnitType);
+            if (unitDefinition)
             {
-                const auto& rect = localSideData._name;
-                auto text = unitDefinition.unitName + "  M:" + formatResource(unitDefinition.buildCostMetal) + " E:" + formatResource(unitDefinition.buildCostEnergy);
-                chromeUiRenderService.drawText(rect.x1, extraBottom + rect.y1, text, *guiFont);
-            }
+                {
+                    const auto& rect = localSideData._name;
+                    auto text = unitDefinition->unitName + "  M:" + formatResource(unitDefinition->buildCostMetal) + " E:" + formatResource(unitDefinition->buildCostEnergy);
+                    chromeUiRenderService.drawText(rect.x1, extraBottom + rect.y1, text, *guiFont);
+                }
 
-            {
-                const auto& rect = localSideData.description;
-                chromeUiRenderService.drawText(rect.x1, extraBottom + rect.y1, unitDefinition.unitDescription, *guiFont);
+                {
+                    const auto& rect = localSideData.description;
+                    chromeUiRenderService.drawText(rect.x1, extraBottom + rect.y1, unitDefinition->unitDescription, *guiFont);
+                }
             }
         }
 
@@ -682,8 +703,9 @@ namespace rwe
             if (const auto buildOrder = std::get_if<BuildOrder>(&order))
             {
                 const auto& unitType = buildOrder->unitType;
-                const auto& unitDefinition = simulation.unitDefinitions.at(unitType);
-                auto footprintRect = simulation.computeFootprintRegion(buildOrder->position, unitDefinition.movementCollisionInfo);
+                const auto* unitDefinition = simulation.tryGetUnitDefinition(unitType);
+                if (!unitDefinition) { continue; }
+                auto footprintRect = simulation.computeFootprintRegion(buildOrder->position, unitDefinition->movementCollisionInfo);
 
                 auto topLeftWorld = simulation.terrain.heightmapIndexToWorldCorner(footprintRect.x, footprintRect.y);
                 topLeftWorld.y = simulation.terrain.getHeightAt(
@@ -888,16 +910,19 @@ namespace rwe
         if (auto selectedUnit = getSingleSelectedUnit(); selectedUnit && movementClassGridVisible)
         {
             const auto& unit = simulation.getUnitState(*selectedUnit);
-            const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
-            match(
-                unitDefinition.movementCollisionInfo,
-                [&](const UnitDefinition::NamedMovementClass& c) {
-                    const auto& grid = simulation.movementClassCollisionService.getGrid(c.movementClassId);
-                    drawMovementClassCollisionGrid(simulation.terrain, grid, worldCameraState.getRoundedPosition(), worldCameraState.scaleDimension(worldViewport.width()), worldCameraState.scaleDimension(worldViewport.height()), terrainOverlayBatch);
-                },
-                [&](const auto&) {
+            const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+            if (unitDefinition)
+            {
+                match(
+                    unitDefinition->movementCollisionInfo,
+                    [&](const UnitDefinition::NamedMovementClass& c) {
+                        const auto& grid = simulation.movementClassCollisionService.getGrid(c.movementClassId);
+                        drawMovementClassCollisionGrid(simulation.terrain, grid, worldCameraState.getRoundedPosition(), worldCameraState.scaleDimension(worldViewport.width()), worldCameraState.scaleDimension(worldViewport.height()), terrainOverlayBatch);
+                    },
+                    [&](const auto&) {
 
-                });
+                    });
+            }
         }
 
         worldRenderService.drawBatch(terrainOverlayBatch, viewProjectionMatrix);
@@ -913,15 +938,17 @@ namespace rwe
             {
                 continue;
             }
-            const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
-            const auto& modelDefinition = simulation.unitModelDefinitions.at(unitDefinition.objectName);
+            const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+            if (!unitDefinition) { continue; }
+            const auto* modelDefinition = simulation.tryGetUnitModelDefinition(unitDefinition->objectName);
+            if (!modelDefinition) { continue; }
 
             auto groundHeight = simulation.terrain.getHeightAt(unit.position.x, unit.position.z);
-            if (unitDefinition.floater || unitDefinition.canHover)
+            if (unitDefinition->floater || unitDefinition->canHover)
             {
                 groundHeight = rweMax(groundHeight, seaLevel);
             }
-            drawUnitShadow(gameMediaDatabase, viewProjectionMatrix, unit, unitDefinition, modelDefinition, interpolationFraction, simScalarToFloat(groundHeight), unitTextureAtlas.get(), unitTeamTextureAtlases, unitShadowMeshBatch);
+            drawUnitShadow(gameMediaDatabase, viewProjectionMatrix, unit, *unitDefinition, *modelDefinition, interpolationFraction, simScalarToFloat(groundHeight), unitTextureAtlas.get(), unitTeamTextureAtlases, unitShadowMeshBatch);
         }
         for (const auto& [_, feature] : simulation.features)
         {
@@ -946,9 +973,11 @@ namespace rwe
             {
                 continue;
             }
-            const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
-            const auto& unitModelDefinition = simulation.unitModelDefinitions.at(unitDefinition.objectName);
-            drawUnit(gameMediaDatabase, viewProjectionMatrix, unit, unitDefinition, unitModelDefinition, getPlayer(unit.owner).color, interpolationFraction, unitTextureAtlas.get(), unitTeamTextureAtlases, unitMeshBatch);
+            const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+            if (!unitDefinition) { continue; }
+            const auto* unitModelDefinition = simulation.tryGetUnitModelDefinition(unitDefinition->objectName);
+            if (!unitModelDefinition) { continue; }
+            drawUnit(gameMediaDatabase, viewProjectionMatrix, unit, *unitDefinition, *unitModelDefinition, getPlayer(unit.owner).color, interpolationFraction, unitTextureAtlas.get(), unitTeamTextureAtlases, unitMeshBatch);
         }
         for (const auto& [_, feature] : simulation.features)
         {
@@ -987,8 +1016,9 @@ namespace rwe
         for (const auto& selectedUnitId : selectedUnits)
         {
             const auto& unit = getUnit(selectedUnitId);
-            const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
-            drawSelectionRect(gameMediaDatabase, viewProjectionMatrix, unit, unitDefinition, interpolationFraction, selectionRectBatch);
+            const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+            if (!unitDefinition) { continue; }
+            drawSelectionRect(gameMediaDatabase, viewProjectionMatrix, unit, *unitDefinition, interpolationFraction, selectionRectBatch);
         }
         worldRenderService.drawLineLoopsBatch(selectionRectBatch);
 
@@ -1181,14 +1211,15 @@ namespace rwe
                     continue;
                 }
 
-                const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
+                const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+                if (!unitDefinition) { continue; }
                 auto uiPos = worldToHealthUi * simVectorToFloat(unit.position);
                 float x = std::floor(uiPos.x) - 17.0f;
                 float y = std::floor(uiPos.y) + 8.0f;
                 float w = 35.0f;
                 float h = 5.0f;
                 float bw = 1.0f;
-                float pct = static_cast<float>(unit.hitPoints) / static_cast<float>(unitDefinition.maxHitPoints);
+                float pct = static_cast<float>(unit.hitPoints) / static_cast<float>(unitDefinition->maxHitPoints);
                 float innerW = 1.0f + std::floor(pct * (w - 2.0f * bw - 1.0f));
                 float innerH = h - 2.0f * bw;
 
@@ -1846,8 +1877,9 @@ namespace rwe
                 std::optional<UnitId> commanderUnitId;
                 for (const auto& [unitId, unit] : simulation.units)
                 {
-                    const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
-                    if (unitDefinition.commander && unit.isOwnedBy(localPlayerId))
+                    const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+                    if (!unitDefinition) { continue; }
+                    if (unitDefinition->commander && unit.isOwnedBy(localPlayerId))
                     {
                         selectAdditionalUnit(unitId);
                         // For multiple commanders, OTA selects all but always tracks only the last spawned (it won't cycle with repeated ctrl-c)
@@ -2069,7 +2101,9 @@ namespace rwe
                                     }
                                     else
                                     {
-                                        if (const auto& u = getUnit(*hoveredUnit); u.isBeingBuilt(simulation.unitDefinitions.at(u.unitType)))
+                                        const auto& u = getUnit(*hoveredUnit);
+                                        const auto* uDef = simulation.tryGetUnitDefinition(u.unitType);
+                                        if (uDef && u.isBeingBuilt(*uDef))
                                         {
                                             if (isShiftDown())
                                             {
@@ -2161,7 +2195,9 @@ namespace rwe
                                 }
                                 else
                                 {
-                                    if (const auto& u = getUnit(*hoveredUnit); u.isBeingBuilt(simulation.unitDefinitions.at(u.unitType)))
+                                    const auto& u = getUnit(*hoveredUnit);
+                                    const auto* uDef = simulation.tryGetUnitDefinition(u.unitType);
+                                    if (uDef && u.isBeingBuilt(*uDef))
                                     {
                                         if (isShiftDown())
                                         {
@@ -2230,7 +2266,8 @@ namespace rwe
 
                             if (sceneTime - state.startTime < SceneTime(30) && state.startPosition.maxSingleDimensionDistance(originRelativePos) < 32)
                             {
-                                if (hoveredUnit && getUnit(*hoveredUnit).isSelectableBy(simulation.unitDefinitions.at(getUnit(*hoveredUnit).unitType), localPlayerId))
+                                const auto* hoveredUnitDef = hoveredUnit ? simulation.tryGetUnitDefinition(getUnit(*hoveredUnit).unitType) : nullptr;
+                                if (hoveredUnit && hoveredUnitDef && getUnit(*hoveredUnit).isSelectableBy(*hoveredUnitDef, localPlayerId))
                                 {
                                     if (isShiftDown())
                                     {
@@ -2259,7 +2296,9 @@ namespace rwe
                                     }
                                     else
                                     {
-                                        if (const auto& u = getUnit(*hoveredUnit); u.isBeingBuilt(simulation.unitDefinitions.at(u.unitType)))
+                                        const auto& u2 = getUnit(*hoveredUnit);
+                                        const auto* u2Def = simulation.tryGetUnitDefinition(u2.unitType);
+                                        if (u2Def && u2.isBeingBuilt(*u2Def))
                                         {
                                             for (const auto& selectedUnit : selectedUnits)
                                             {
@@ -2533,11 +2572,18 @@ namespace rwe
             {
                 const auto& unitType = buildCursor->unitType;
                 const auto& pos = *intersect;
-                const auto& unitDefinition = simulation.unitDefinitions.at(unitType);
-                auto mc = simulation.getAdHocMovementClass(unitDefinition.movementCollisionInfo);
-                auto footprintRect = simulation.computeFootprintRegion(pos, unitDefinition.movementCollisionInfo);
-                auto isValid = simulation.canBeBuiltAt(mc, unitDefinition.yardMap, unitDefinition.yardMapContainsGeo, footprintRect.x, footprintRect.y);
-                hoverBuildInfo = HoverBuildInfo{footprintRect, isValid};
+                const auto* unitDefinition = simulation.tryGetUnitDefinition(unitType);
+                if (!unitDefinition)
+                {
+                    hoverBuildInfo = std::nullopt;
+                }
+                else
+                {
+                    auto mc = simulation.getAdHocMovementClass(unitDefinition->movementCollisionInfo);
+                    auto footprintRect = simulation.computeFootprintRegion(pos, unitDefinition->movementCollisionInfo);
+                    auto isValid = simulation.canBeBuiltAt(mc, unitDefinition->yardMap, unitDefinition->yardMapContainsGeo, footprintRect.x, footprintRect.y);
+                    hoverBuildInfo = HoverBuildInfo{footprintRect, isValid};
+                }
             }
             else
             {
@@ -2814,10 +2860,11 @@ namespace rwe
         if (unitId)
         {
             auto& unit = getUnit(*unitId);
-            const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
+            const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+            if (!unitDefinition) { return std::nullopt; }
             // units start as unbuilt nanoframes,
             // we we need to convert it immediately into a completed unit.
-            unit.finishBuilding(unitDefinition);
+            unit.finishBuilding(*unitDefinition);
 
             return unit;
         }
@@ -2910,8 +2957,9 @@ namespace rwe
 
     std::optional<AudioService::SoundHandle> getSound(const GameSimulation& sim, const GameMediaDatabase& meshDb, const std::string& unitType, UnitSoundType soundType)
     {
-        const auto& unitDefinition = sim.unitDefinitions.at(unitType);
-        const auto& soundClass = meshDb.getSoundClassOrDefault(unitDefinition.soundCategory);
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unitType);
+        if (!unitDefinition) { return std::nullopt; }
+        const auto& soundClass = meshDb.getSoundClassOrDefault(unitDefinition->soundCategory);
         const auto& soundId = getSoundName(soundClass, soundType);
         if (soundId)
         {
@@ -3216,10 +3264,11 @@ namespace rwe
 
         for (const auto& entry : simulation.units)
         {
-            const auto& unitDefinition = simulation.unitDefinitions.at(entry.second.unitType);
-            auto selectionMesh = gameMediaDatabase.getSelectionCollisionMesh(unitDefinition.objectName);
+            const auto* unitDefinition = simulation.tryGetUnitDefinition(entry.second.unitType);
+            if (!unitDefinition) { continue; }
+            auto selectionMesh = gameMediaDatabase.getSelectionCollisionMesh(unitDefinition->objectName);
             auto distance = selectionIntersect(entry.second, *selectionMesh.value(), ray);
-            auto isMobile = unitDefinition.isMobile;
+            auto isMobile = unitDefinition->isMobile;
             if (distance && ((!winnerIsMobile && isMobile) || distance < bestDistance))
             {
                 winnerIsMobile = isMobile;
@@ -3639,8 +3688,11 @@ namespace rwe
                     auto unit = tryGetUnit(e.unitId);
                     if (unit)
                     {
-                        const auto& unitDefinition = simulation.unitDefinitions.at(unit->get().unitType);
-                        unitGuiInfos.insert_or_assign(e.unitId, UnitGuiInfo{unitDefinition.builder ? UnitGuiInfo::Section::Build : UnitGuiInfo::Section::Orders, 0});
+                        const auto* unitDefinition = simulation.tryGetUnitDefinition(unit->get().unitType);
+                        if (unitDefinition)
+                        {
+                            unitGuiInfos.insert_or_assign(e.unitId, UnitGuiInfo{unitDefinition->builder ? UnitGuiInfo::Section::Build : UnitGuiInfo::Section::Orders, 0});
+                        }
                     }
                 },
 
@@ -3763,9 +3815,10 @@ namespace rwe
     void GameScene::emitWake1FromPiece(UnitId unitId, const std::string& pieceName)
     {
         const auto& unit = getUnit(unitId);
-        const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
+        const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return; }
         auto pieceTransform = toFloatMatrix(simulation.getUnitPieceTransform(unitId, pieceName));
-        const auto& pieceMesh = gameMediaDatabase.getUnitPieceMesh(unitDefinition.objectName, pieceName).value().get();
+        const auto& pieceMesh = gameMediaDatabase.getUnitPieceMesh(unitDefinition->objectName, pieceName).value().get();
         auto spawnPosition = pieceTransform * pieceMesh.firstVertexPosition;
         auto otherVertexPosition = pieceTransform * pieceMesh.secondVertexPosition;
 
@@ -4004,7 +4057,9 @@ namespace rwe
                 }
 
                 const auto& unit = getUnit(*selectedUnit);
-                auto& guiInfo = unitGuiInfos.at(*selectedUnit);
+                auto guiInfoIt = unitGuiInfos.find(*selectedUnit);
+                if (guiInfoIt == unitGuiInfos.end()) { return; }
+                auto& guiInfo = guiInfoIt->second;
                 auto pages = getBuildPageCount(builderGuisDatabase, unit.unitType);
                 guiInfo.currentBuildPage = (guiInfo.currentBuildPage + 1) % pages;
 
@@ -4025,7 +4080,9 @@ namespace rwe
                 }
 
                 const auto& unit = getUnit(*selectedUnit);
-                auto& guiInfo = unitGuiInfos.at(*selectedUnit);
+                auto guiInfoIt = unitGuiInfos.find(*selectedUnit);
+                if (guiInfoIt == unitGuiInfos.end()) { return; }
+                auto& guiInfo = guiInfoIt->second;
                 auto pages = getBuildPageCount(builderGuisDatabase, unit.unitType);
                 assert(pages != 0);
                 guiInfo.currentBuildPage = guiInfo.currentBuildPage == 0 ? pages - 1 : guiInfo.currentBuildPage - 1;
@@ -4047,7 +4104,9 @@ namespace rwe
                 }
 
                 const auto& unit = getUnit(*selectedUnit);
-                auto& guiInfo = unitGuiInfos.at(*selectedUnit);
+                auto guiInfoIt = unitGuiInfos.find(*selectedUnit);
+                if (guiInfoIt == unitGuiInfos.end()) { return; }
+                auto& guiInfo = guiInfoIt->second;
                 guiInfo.section = UnitGuiInfo::Section::Build;
 
                 auto buildPanelDefinition = getBuilderGui(builderGuisDatabase, unit.unitType, guiInfo.currentBuildPage);
@@ -4066,7 +4125,9 @@ namespace rwe
                     sceneContext.audioService->playSound(*sounds.ordersButton);
                 }
 
-                auto& guiInfo = unitGuiInfos.at(*selectedUnit);
+                auto guiInfoIt = unitGuiInfos.find(*selectedUnit);
+                if (guiInfoIt == unitGuiInfos.end()) { return; }
+                auto& guiInfo = guiInfoIt->second;
                 guiInfo.section = UnitGuiInfo::Section::Orders;
 
                 const auto& sidePrefix = sceneContext.sideData->at(getPlayer(localPlayerId).side).namePrefix;
@@ -4083,8 +4144,9 @@ namespace rwe
             if (auto selectedUnit = getSingleSelectedUnit(); selectedUnit)
             {
                 const auto& unit = getUnit(*selectedUnit);
-                const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
-                if (unitDefinition.isMobile)
+                const auto* unitDefinition = simulation.tryGetUnitDefinition(unit.unitType);
+                if (!unitDefinition) { return; }
+                if (unitDefinition->isMobile)
                 {
                     cursorMode.next(BuildCursorMode{message});
                 }
@@ -4126,8 +4188,9 @@ namespace rwe
 
         for (const auto& e : simulation.units)
         {
-            const auto& unitDefinition = simulation.unitDefinitions.at(e.second.unitType);
-            if (!e.second.isSelectableBy(unitDefinition, localPlayerId))
+            const auto* unitDefinition = simulation.tryGetUnitDefinition(e.second.unitType);
+            if (!unitDefinition) { continue; }
+            if (!e.second.isSelectableBy(*unitDefinition, localPlayerId))
             {
                 continue;
             }

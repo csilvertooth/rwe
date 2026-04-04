@@ -195,9 +195,10 @@ namespace rwe
 
     std::vector<UnitMesh> createUnitMeshes(const GameSimulation& sim, const std::string& objectName)
     {
-        const auto& def = sim.unitModelDefinitions.at(objectName);
+        const auto* def = sim.tryGetUnitModelDefinition(objectName);
+        if (!def) { return {}; }
 
-        const auto& pieceDefs = def.pieces;
+        const auto& pieceDefs = def->pieces;
 
         std::vector<UnitMesh> pieces(pieceDefs.size());
         for (Index i = 0; i < getSize(pieces); ++i)
@@ -208,19 +209,21 @@ namespace rwe
         return pieces;
     }
 
-    UnitState createUnit(
+    std::optional<UnitState> createUnit(
         GameSimulation& simulation,
         const std::string& unitType,
         PlayerId owner,
         const SimVector& position,
         std::optional<SimAngle> rotation)
     {
-        const auto& unitDefinition = simulation.unitDefinitions.at(unitType);
+        const auto* unitDefinition = simulation.tryGetUnitDefinition(unitType);
+        if (!unitDefinition) { return std::nullopt; }
 
-        auto meshes = createUnitMeshes(simulation, unitDefinition.objectName);
-        auto modelDefinition = simulation.unitModelDefinitions.at(unitDefinition.objectName);
+        auto meshes = createUnitMeshes(simulation, unitDefinition->objectName);
+        const auto* modelDefinition = simulation.tryGetUnitModelDefinition(unitDefinition->objectName);
+        if (!modelDefinition) { return std::nullopt; }
 
-        if (unitDefinition.isMobile)
+        if (unitDefinition->isMobile)
         {
             // don't shade mobile units
             for (auto& m : meshes)
@@ -229,8 +232,9 @@ namespace rwe
             }
         }
 
-        const auto& script = simulation.unitScriptDefinitions.at(unitType);
-        auto cobEnv = std::make_unique<CobEnvironment>(&script);
+        const auto* script = simulation.tryGetUnitScript(unitType);
+        if (!script) { return std::nullopt; }
+        auto cobEnv = std::make_unique<CobEnvironment>(script);
         UnitState unit(meshes, std::move(cobEnv));
         unit.unitType = toUpper(unitType);
         unit.owner = owner;
@@ -242,7 +246,7 @@ namespace rwe
             unit.rotation = *rotation;
             unit.previousRotation = *rotation;
         }
-        else if (unitDefinition.isMobile)
+        else if (unitDefinition->isMobile)
         {
             // spawn the unit facing the other way
             unit.rotation = HalfTurn;
@@ -250,17 +254,17 @@ namespace rwe
         }
 
         // add weapons
-        if (!unitDefinition.weapon1.empty())
+        if (!unitDefinition->weapon1.empty())
         {
-            unit.weapons[0] = tryCreateWeapon(simulation, unitDefinition.weapon1);
+            unit.weapons[0] = tryCreateWeapon(simulation, unitDefinition->weapon1);
         }
-        if (!unitDefinition.weapon2.empty())
+        if (!unitDefinition->weapon2.empty())
         {
-            unit.weapons[1] = tryCreateWeapon(simulation, unitDefinition.weapon2);
+            unit.weapons[1] = tryCreateWeapon(simulation, unitDefinition->weapon2);
         }
-        if (!unitDefinition.weapon3.empty())
+        if (!unitDefinition->weapon3.empty())
         {
-            unit.weapons[2] = tryCreateWeapon(simulation, unitDefinition.weapon3);
+            unit.weapons[2] = tryCreateWeapon(simulation, unitDefinition->weapon3);
         }
 
         return unit;
@@ -268,9 +272,13 @@ namespace rwe
 
     std::optional<UnitId> GameSimulation::trySpawnUnit(const std::string& unitType, PlayerId owner, const SimVector& position, std::optional<SimAngle> rotation)
     {
-        auto unit = createUnit(*this, unitType, owner, position, rotation);
-        const auto& unitDefinition = unitDefinitions.at(unitType);
-        if (unitDefinition.floater || unitDefinition.canHover)
+        auto unitOpt = createUnit(*this, unitType, owner, position, rotation);
+        if (!unitOpt) { return std::nullopt; }
+        auto& unit = *unitOpt;
+
+        const auto* unitDefinition = tryGetUnitDefinition(unitType);
+        if (!unitDefinition) { return std::nullopt; }
+        if (unitDefinition->floater || unitDefinition->canHover)
         {
             unit.position.y = rweMax(terrain.getSeaLevel(), unit.position.y);
             unit.previousPosition.y = unit.position.y;
@@ -290,10 +298,11 @@ namespace rwe
 
     std::optional<UnitId> GameSimulation::tryAddUnit(UnitState&& unit)
     {
-        const auto& unitDefinition = unitDefinitions.at(unit.unitType);
+        const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return std::nullopt; }
 
         // set footprint area as occupied by the unit
-        auto footprintRect = computeFootprintRegion(unit.position, unitDefinition.movementCollisionInfo);
+        auto footprintRect = computeFootprintRegion(unit.position, unitDefinition->movementCollisionInfo);
         if (isCollisionAt(footprintRect))
         {
             return std::nullopt;
@@ -305,14 +314,14 @@ namespace rwe
         auto footprintRegion = occupiedGrid.tryToRegion(footprintRect);
         assert(!!footprintRegion);
 
-        if (unitDefinition.isMobile)
+        if (unitDefinition->isMobile)
         {
             occupiedGrid.forEach(*footprintRegion, [unitId](auto& cell) { cell.mobileUnitId = unitId; });
         }
         else
         {
-            assert(!!unitDefinition.yardMap);
-            occupiedGrid.forEach2(footprintRegion->x, footprintRegion->y, *unitDefinition.yardMap, [&](auto& cell, const auto& yardMapCell) {
+            assert(!!unitDefinition->yardMap);
+            occupiedGrid.forEach2(footprintRegion->x, footprintRegion->y, *unitDefinition->yardMap, [&](auto& cell, const auto& yardMapCell) {
                 cell.buildingInfo = OccupiedCellBuildingInfo{unitId, isPassable(yardMapCell, insertedUnit.yardOpen)};
             });
         }
@@ -542,15 +551,17 @@ namespace rwe
     UnitInfo GameSimulation::getUnitInfo(UnitId id)
     {
         auto& state = getUnitState(id);
-        const auto& definition = unitDefinitions.at(state.unitType);
-        return UnitInfo(id, &state, &definition);
+        const auto* definition = tryGetUnitDefinition(state.unitType);
+        assert(definition);
+        return UnitInfo(id, &state, definition);
     }
 
     ConstUnitInfo GameSimulation::getUnitInfo(UnitId id) const
     {
         auto& state = getUnitState(id);
-        const auto& definition = unitDefinitions.at(state.unitType);
-        return ConstUnitInfo(id, &state, &definition);
+        const auto* definition = tryGetUnitDefinition(state.unitType);
+        assert(definition);
+        return ConstUnitInfo(id, &state, definition);
     }
 
     std::optional<std::reference_wrapper<UnitState>> GameSimulation::tryGetUnitState(UnitId id)
@@ -820,18 +831,19 @@ namespace rwe
     bool GameSimulation::trySetYardOpen(const UnitId& unitId, bool open)
     {
         auto& unit = getUnitState(unitId);
-        const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-        auto footprintRect = computeFootprintRegion(unit.position, unitDefinition.movementCollisionInfo);
+        const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return false; }
+        auto footprintRect = computeFootprintRegion(unit.position, unitDefinition->movementCollisionInfo);
         auto footprintRegion = occupiedGrid.tryToRegion(footprintRect);
         assert(!!footprintRegion);
 
-        assert(!!unitDefinition.yardMap);
-        if (isYardmapBlocked(footprintRegion->x, footprintRegion->y, *unitDefinition.yardMap, open, unitId))
+        assert(!!unitDefinition->yardMap);
+        if (isYardmapBlocked(footprintRegion->x, footprintRegion->y, *unitDefinition->yardMap, open, unitId))
         {
             return false;
         }
 
-        occupiedGrid.forEach2(footprintRegion->x, footprintRegion->y, *unitDefinition.yardMap, [&](auto& cell, const auto& yardMapCell) {
+        occupiedGrid.forEach2(footprintRegion->x, footprintRegion->y, *unitDefinition->yardMap, [&](auto& cell, const auto& yardMapCell) {
             cell.buildingInfo = OccupiedCellBuildingInfo{unitId, isPassable(yardMapCell, open)};
         });
 
@@ -843,8 +855,9 @@ namespace rwe
     void GameSimulation::emitBuggerOff(const UnitId& unitId)
     {
         auto& unit = getUnitState(unitId);
-        const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-        auto footprintRect = computeFootprintRegion(unit.position, unitDefinition.movementCollisionInfo);
+        const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return; }
+        auto footprintRect = computeFootprintRegion(unit.position, unitDefinition->movementCollisionInfo);
         auto footprintRegion = occupiedGrid.tryToRegion(footprintRect);
         assert(!!footprintRegion);
 
@@ -893,26 +906,32 @@ namespace rwe
     Matrix4x<SimScalar> GameSimulation::getUnitPieceLocalTransform(UnitId unitId, const std::string& pieceName) const
     {
         const auto& unit = getUnitState(unitId);
-        const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-        const auto& modelDef = unitModelDefinitions.at(unitDefinition.objectName);
-        return getPieceTransform(pieceName, modelDef, unit.pieces);
+        const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return Matrix4x<SimScalar>::identity(); }
+        const auto* modelDef = tryGetUnitModelDefinition(unitDefinition->objectName);
+        if (!modelDef) { return Matrix4x<SimScalar>::identity(); }
+        return getPieceTransform(pieceName, *modelDef, unit.pieces);
     }
 
     Matrix4x<SimScalar> GameSimulation::getUnitPieceTransform(UnitId unitId, const std::string& pieceName) const
     {
         const auto& unit = getUnitState(unitId);
-        const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-        const auto& modelDef = unitModelDefinitions.at(unitDefinition.objectName);
-        auto pieceTransform = getPieceTransform(pieceName, modelDef, unit.pieces);
+        const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return Matrix4x<SimScalar>::identity(); }
+        const auto* modelDef = tryGetUnitModelDefinition(unitDefinition->objectName);
+        if (!modelDef) { return Matrix4x<SimScalar>::identity(); }
+        auto pieceTransform = getPieceTransform(pieceName, *modelDef, unit.pieces);
         return unit.getTransform() * pieceTransform;
     }
 
     SimVector GameSimulation::getUnitPiecePosition(UnitId unitId, const std::string& pieceName) const
     {
         const auto& unit = getUnitState(unitId);
-        const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-        const auto& modelDef = unitModelDefinitions.at(unitDefinition.objectName);
-        auto pieceTransform = getPieceTransform(pieceName, modelDef, unit.pieces);
+        const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return SimVector(0_ss, 0_ss, 0_ss); }
+        const auto* modelDef = tryGetUnitModelDefinition(unitDefinition->objectName);
+        if (!modelDef) { return SimVector(0_ss, 0_ss, 0_ss); }
+        auto pieceTransform = getPieceTransform(pieceName, *modelDef, unit.pieces);
         return unit.getTransform() * pieceTransform * SimVector(0_ss, 0_ss, 0_ss);
     }
 
@@ -1002,13 +1021,16 @@ namespace rwe
             const auto& unit = sim.getUnitState(*cellValue.mobileUnitId);
             if (!unit.isOwnedBy(projectile.owner))
             {
-                const auto& unitDefinition = sim.unitDefinitions.at(unit.unitType);
-                const auto& modelDefinition = sim.unitModelDefinitions.at(unitDefinition.objectName);
-                auto unitBottom = unit.position.y;
-                auto unitTop = unit.position.y + modelDefinition.height;
-                if (projMaxY >= unitBottom && projMinY <= unitTop)
+                const auto* unitDefinition = sim.tryGetUnitDefinition(unit.unitType);
+                const auto* modelDefinition = unitDefinition ? sim.tryGetUnitModelDefinition(unitDefinition->objectName) : nullptr;
+                if (unitDefinition && modelDefinition)
                 {
-                    return true;
+                    auto unitBottom = unit.position.y;
+                    auto unitTop = unit.position.y + modelDefinition->height;
+                    if (projMaxY >= unitBottom && projMinY <= unitTop)
+                    {
+                        return true;
+                    }
                 }
             }
         }
@@ -1019,13 +1041,16 @@ namespace rwe
             const auto& unit = sim.getUnitState(cellValue.buildingInfo->unit);
             if (!unit.isOwnedBy(projectile.owner))
             {
-                const auto& unitDefinition = sim.unitDefinitions.at(unit.unitType);
-                const auto& modelDefinition = sim.unitModelDefinitions.at(unitDefinition.objectName);
-                auto unitBottom = unit.position.y;
-                auto unitTop = unit.position.y + modelDefinition.height;
-                if (projMaxY >= unitBottom && projMinY <= unitTop)
+                const auto* unitDefinition = sim.tryGetUnitDefinition(unit.unitType);
+                const auto* modelDefinition = unitDefinition ? sim.tryGetUnitModelDefinition(unitDefinition->objectName) : nullptr;
+                if (unitDefinition && modelDefinition)
                 {
-                    return true;
+                    auto unitBottom = unit.position.y;
+                    auto unitTop = unit.position.y + modelDefinition->height;
+                    if (projMaxY >= unitBottom && projMinY <= unitTop)
+                    {
+                        return true;
+                    }
                 }
             }
         }
@@ -1053,9 +1078,10 @@ namespace rwe
             return false;
         }
 
-        const auto& unitDefinition = sim.unitDefinitions.at(unit.unitType);
+        const auto* unitDefinition = sim.tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return false; }
 
-        auto footprintRect = sim.computeFootprintRegion(unit.position, unitDefinition.movementCollisionInfo);
+        auto footprintRect = sim.computeFootprintRegion(unit.position, unitDefinition->movementCollisionInfo);
         auto heightMapPos = sim.terrain.worldToHeightmapCoordinate(projectile.position);
 
         if (!footprintRect.contains(heightMapPos))
@@ -1063,11 +1089,12 @@ namespace rwe
             return false;
         }
 
-        const auto& modelDefinition = sim.unitModelDefinitions.at(unitDefinition.objectName);
+        const auto* modelDefinition = sim.tryGetUnitModelDefinition(unitDefinition->objectName);
+        if (!modelDefinition) { return false; }
 
         // Check if the projectile crossed through the unit's height range
         auto unitBottom = unit.position.y;
-        auto unitTop = unit.position.y + modelDefinition.height;
+        auto unitTop = unit.position.y + modelDefinition->height;
         auto projMinY = std::min(projectile.previousPosition.y, projectile.position.y);
         auto projMaxY = std::max(projectile.previousPosition.y, projectile.position.y);
         if (projMaxY < unitBottom || projMinY > unitTop)
@@ -1170,11 +1197,13 @@ namespace rwe
 
     BoundingBox3x<SimScalar> GameSimulation::createBoundingBox(const UnitState& unit) const
     {
-        const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-        const auto& modelDefinition = unitModelDefinitions.at(unitDefinition.objectName);
-        auto footprint = computeFootprintRegion(unit.position, unitDefinition.movementCollisionInfo);
+        const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+        if (!unitDefinition) { return BoundingBox3x<SimScalar>::fromMinMax(unit.position, unit.position); }
+        const auto* modelDefinition = tryGetUnitModelDefinition(unitDefinition->objectName);
+        if (!modelDefinition) { return BoundingBox3x<SimScalar>::fromMinMax(unit.position, unit.position); }
+        auto footprint = computeFootprintRegion(unit.position, unitDefinition->movementCollisionInfo);
         auto min = SimVector(SimScalar(footprint.x), unit.position.y, SimScalar(footprint.y));
-        auto max = SimVector(SimScalar(footprint.x + footprint.width), unit.position.y + modelDefinition.height, SimScalar(footprint.y + footprint.height));
+        auto max = SimVector(SimScalar(footprint.x + footprint.width), unit.position.y + modelDefinition->height, SimScalar(footprint.y + footprint.height));
         auto worldMin = terrain.heightmapToWorldSpace(min);
         auto worldMax = terrain.heightmapToWorldSpace(max);
         return BoundingBox3x<SimScalar>::fromMinMax(worldMin, worldMax);
@@ -1230,8 +1259,8 @@ namespace rwe
         {
             // Paralyzer weapons accumulate stun damage instead of HP damage
             unit.stunDamage += damagePoints;
-            const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-            if (unit.stunDamage >= unitDefinition.maxHitPoints)
+            const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+            if (unitDefinition && unit.stunDamage >= unitDefinition->maxHitPoints)
             {
                 unit.stunned = true;
             }
@@ -1252,8 +1281,8 @@ namespace rwe
                 }
             }
 
-            const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-            if (unit.isBeingBuilt(unitDefinition))
+            const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+            if (unitDefinition && unit.isBeingBuilt(*unitDefinition))
             {
                 quietlyKillUnit(unitId);
             }
@@ -1533,8 +1562,9 @@ namespace rwe
         // if a commander died this frame, kill the player that owns it
         for (const auto& p : units)
         {
-            const auto& unitDefinition = unitDefinitions.at(p.second.unitType);
-            if (unitDefinition.commander && p.second.isDead())
+            const auto* unitDefinition = tryGetUnitDefinition(p.second.unitType);
+            if (!unitDefinition) { continue; }
+            if (unitDefinition->commander && p.second.isDead())
             {
                 killPlayer(p.second.owner);
             }
@@ -1578,19 +1608,20 @@ namespace rwe
             for (auto& entry : units)
             {
                 auto& unit = entry.second;
-                const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-                if (!unit.isBeingBuilt(unitDefinition))
+                const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+                if (!unitDefinition) { continue; }
+                if (!unit.isBeingBuilt(*unitDefinition))
                 {
                     auto& playerInfo = getPlayer(unit.owner);
-                    if (unitDefinition.commander)
+                    if (unitDefinition->commander)
                     {
                         playerInfo.maxMetal += playerInfo.startingMetal;
                         playerInfo.maxEnergy += playerInfo.startingEnergy;
                     }
                     else
                     {
-                        playerInfo.maxMetal += unitDefinition.metalStorage;
-                        playerInfo.maxEnergy += unitDefinition.energyStorage;
+                        playerInfo.maxMetal += unitDefinition->metalStorage;
+                        playerInfo.maxEnergy += unitDefinition->energyStorage;
                     }
                 }
             }
@@ -1645,41 +1676,42 @@ namespace rwe
             {
                 const auto& unitId = entry.first;
                 auto& unit = entry.second;
-                const auto& unitDefinition = unitDefinitions.at(unit.unitType);
+                const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+                if (!unitDefinition) { continue; }
 
                 unit.resetResourceBuffers();
 
-                if (!unit.isBeingBuilt(unitDefinition))
+                if (!unit.isBeingBuilt(*unitDefinition))
                 {
-                    addResourceDelta(unitId, unitDefinition.energyMake, unitDefinition.metalMake);
+                    addResourceDelta(unitId, unitDefinition->energyMake, unitDefinition->metalMake);
                 }
 
                 if (unit.activated)
                 {
-                    if (unitDefinition.windGenerator != Energy(0))
+                    if (unitDefinition->windGenerator != Energy(0))
                     {
                         // generate energy from wind
-                        addResourceDelta(unitId, unitDefinition.windGenerator * currentWindGenerationFactor, Metal(0));
+                        addResourceDelta(unitId, unitDefinition->windGenerator * currentWindGenerationFactor, Metal(0));
                     }
 
                     if (unit.isSufficientlyPowered)
                     {
                         // extract metal
-                        if (unitDefinition.extractsMetal != Metal(0))
+                        if (unitDefinition->extractsMetal != Metal(0))
                         {
-                            auto footprint = computeFootprintRegion(unit.position, unitDefinition.movementCollisionInfo);
+                            auto footprint = computeFootprintRegion(unit.position, unitDefinition->movementCollisionInfo);
                             auto metalValue = metalGrid.accumulate(metalGrid.clipRegion(footprint), 0u, std::plus<>());
-                            addResourceDelta(unitId, Energy(0), Metal(metalValue * unitDefinition.extractsMetal.value));
+                            addResourceDelta(unitId, Energy(0), Metal(metalValue * unitDefinition->extractsMetal.value));
                         }
 
                         // make metal
-                        if (unitDefinition.makesMetal != Metal(0))
+                        if (unitDefinition->makesMetal != Metal(0))
                         {
-                            addResourceDelta(unitId, Energy(0), unitDefinition.makesMetal);
+                            addResourceDelta(unitId, Energy(0), unitDefinition->makesMetal);
                         }
                     }
 
-                    unit.isSufficientlyPowered = addResourceDelta(unitId, -unitDefinition.energyUse, -unitDefinition.metalUse);
+                    unit.isSufficientlyPowered = addResourceDelta(unitId, -unitDefinition->energyUse, -unitDefinition->metalUse);
                 }
             }
         }
@@ -1712,7 +1744,12 @@ namespace rwe
         for (auto it = units.begin(); it != units.end();)
         {
             const auto& unit = it->second;
-            const auto& unitDefinition = unitDefinitions.at(unit.unitType);
+            const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+            if (!unitDefinition)
+            {
+                it = units.erase(it);
+                continue;
+            }
             auto deadState = std::get_if<UnitState::LifeStateDead>(&unit.lifeState);
             if (deadState == nullptr)
             {
@@ -1720,18 +1757,18 @@ namespace rwe
                 continue;
             }
 
-            if (deadState->leaveCorpse && !unitDefinition.corpse.empty())
+            if (deadState->leaveCorpse && !unitDefinition->corpse.empty())
             {
                 corpsesToSpawn.push_back(CorpseSpawnInfo{
-                    unitDefinition.corpse,
+                    unitDefinition->corpse,
                     unit.position,
                     unit.rotation});
             }
 
-            auto footprintRect = computeFootprintRegion(unit.position, unitDefinition.movementCollisionInfo);
+            auto footprintRect = computeFootprintRegion(unit.position, unitDefinition->movementCollisionInfo);
             auto footprintRegion = occupiedGrid.tryToRegion(footprintRect);
             assert(!!footprintRegion);
-            if (unitDefinition.isMobile)
+            if (unitDefinition->isMobile)
             {
                 if (isFlying(unit.physics))
                 {
@@ -1886,8 +1923,8 @@ namespace rwe
             if (unit.stunDamage > 0 && (gameTime.value % 4 == 0))
             {
                 unit.stunDamage--;
-                const auto& unitDefinition = unitDefinitions.at(unit.unitType);
-                if (unit.stunDamage < unitDefinition.maxHitPoints)
+                const auto* unitDefinition = tryGetUnitDefinition(unit.unitType);
+                if (unitDefinition && unit.stunDamage < unitDefinition->maxHitPoints)
                 {
                     unit.stunned = false;
                 }
@@ -1966,8 +2003,9 @@ namespace rwe
             }
 
             // Compute new visibility
-            const auto& unitDef = unitDefinitions.at(unit.unitType);
-            int sightRadiusCells = static_cast<int>(unitDef.sightDistance) / 16;
+            const auto* unitDef = tryGetUnitDefinition(unit.unitType);
+            if (!unitDef) { continue; }
+            int sightRadiusCells = static_cast<int>(unitDef->sightDistance) / 16;
             if (sightRadiusCells <= 0)
             {
                 sightRadiusCells = 10; // default sight if not specified
@@ -2057,10 +2095,11 @@ namespace rwe
                 continue;
             }
 
-            const auto& unitDef = unitDefinitions.at(unit.unitType);
+            const auto* unitDef = tryGetUnitDefinition(unit.unitType);
+            if (!unitDef) { continue; }
 
             // Skip units with no radar/sonar
-            if (unitDef.radarDistance == 0 && unitDef.sonarDistance == 0)
+            if (unitDef->radarDistance == 0 && unitDef->sonarDistance == 0)
             {
                 continue;
             }
@@ -2082,7 +2121,7 @@ namespace rwe
             {
                 for (const auto& p : unit.currentRadarCells)
                 {
-                    if (unitDef.radarDistance > 0 && radarMap[playerIndex].grid.get(p.x, p.y) > 0)
+                    if (unitDef->radarDistance > 0 && radarMap[playerIndex].grid.get(p.x, p.y) > 0)
                     {
                         radarMap[playerIndex].grid.get(p.x, p.y)--;
                     }
@@ -2090,7 +2129,7 @@ namespace rwe
             }
 
             // Compute new radar cells
-            int radarRadiusCells = static_cast<int>(unitDef.radarDistance) / 16;
+            int radarRadiusCells = static_cast<int>(unitDef->radarDistance) / 16;
             unit.currentRadarCells = computeRadarCells(gridWidth, gridHeight, heightmapPos.x, heightmapPos.y, radarRadiusCells);
             unit.lastRadarPosition = heightmapPos;
 
@@ -2118,8 +2157,8 @@ namespace rwe
         }
 
         // Stealth units are invisible to radar
-        const auto& targetDef = unitDefinitions.at(targetUnit.unitType);
-        if (targetDef.stealth)
+        const auto* targetDef = tryGetUnitDefinition(targetUnit.unitType);
+        if (targetDef && targetDef->stealth)
         {
             return false;
         }
@@ -2136,11 +2175,12 @@ namespace rwe
             {
                 continue;
             }
-            const auto& otherDef = unitDefinitions.at(otherUnit.unitType);
-            if (otherDef.radarDistanceJam > 0)
+            const auto* otherDef = tryGetUnitDefinition(otherUnit.unitType);
+            if (!otherDef) { continue; }
+            if (otherDef->radarDistanceJam > 0)
             {
                 auto jammerPos = terrain.worldToHeightmapCoordinate(otherUnit.position);
-                int jamRadius = static_cast<int>(otherDef.radarDistanceJam) / 16;
+                int jamRadius = static_cast<int>(otherDef->radarDistanceJam) / 16;
                 int dx = heightmapPos.x - jammerPos.x;
                 int dy = heightmapPos.y - jammerPos.y;
                 if (dx * dx + dy * dy <= jamRadius * jamRadius)

@@ -1,5 +1,6 @@
 #include "CobExecutionContext.h"
 #include <random>
+#include <rwe/util/SimpleLogger.h>
 #include <rwe/cob/CobConstants.h>
 #include <rwe/cob/CobOpCode.h>
 #include <rwe/cob/CobUnitId.h>
@@ -588,7 +589,12 @@ namespace rwe
             params[i] = pop();
         }
 
-        const auto& functionInfo = env->script()->functions.at(functionId);
+        if (functionId >= env->script()->functions.size())
+        {
+            LOG_ERROR << "COB function ID out of range: " << functionId;
+            return;
+        }
+        const auto& functionInfo = env->script()->functions[functionId];
         thread->callStack.emplace(functionInfo.address, params);
     }
 
@@ -636,14 +642,27 @@ namespace rwe
     void CobExecutionContext::pushLocalVariable()
     {
         auto variableId = nextInstruction();
-        push(thread->callStack.top().locals.at(variableId));
+        auto& locals = thread->callStack.top().locals;
+        if (variableId >= locals.size())
+        {
+            LOG_ERROR << "COB local variable ID out of range: " << variableId;
+            push(0);
+            return;
+        }
+        push(locals[variableId]);
     }
 
     void CobExecutionContext::popLocalVariable()
     {
         auto variableId = nextInstruction();
         auto value = pop();
-        thread->callStack.top().locals.at(variableId) = value;
+        auto& locals = thread->callStack.top().locals;
+        if (variableId >= locals.size())
+        {
+            LOG_ERROR << "COB local variable ID out of range for write: " << variableId;
+            return;
+        }
+        locals[variableId] = value;
     }
 
     void CobExecutionContext::pushStaticVariable()
@@ -753,6 +772,13 @@ namespace rwe
 
     unsigned int CobExecutionContext::nextInstruction()
     {
-        return env->script()->instructions.at(thread->callStack.top().instructionIndex++);
+        auto& instructions = env->script()->instructions;
+        auto index = thread->callStack.top().instructionIndex++;
+        if (index >= instructions.size())
+        {
+            LOG_ERROR << "COB instruction index out of range: " << index;
+            return 0;
+        }
+        return instructions[index];
     }
 }

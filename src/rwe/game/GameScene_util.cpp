@@ -398,7 +398,10 @@ namespace rwe
         }
         if (mesh.teamVertices)
         {
-            batch.push_back(UnitTextureMeshRenderInfo{&*mesh.teamVertices, matrix, mvpMatrix, shaded, unitTeamTextureAtlases.at(playerColorIndex.value).get()});
+            if (playerColorIndex.value < unitTeamTextureAtlases.size())
+            {
+                batch.push_back(UnitTextureMeshRenderInfo{&*mesh.teamVertices, matrix, mvpMatrix, shaded, unitTeamTextureAtlases[playerColorIndex.value].get()});
+            }
         }
     }
 
@@ -417,7 +420,10 @@ namespace rwe
         }
         if (mesh.teamVertices)
         {
-            batch.push_back(UnitTextureShadowMeshRenderInfo{&*mesh.teamVertices, matrix, viewProjectionMatrix, unitTeamTextureAtlases.at(0).get(), groundHeight});
+            if (!unitTeamTextureAtlases.empty())
+            {
+                batch.push_back(UnitTextureShadowMeshRenderInfo{&*mesh.teamVertices, matrix, viewProjectionMatrix, unitTeamTextureAtlases[0].get(), groundHeight});
+            }
         }
     }
 
@@ -524,7 +530,10 @@ namespace rwe
         }
         if (mesh.teamVertices)
         {
-            batch.push_back(UnitBuildingMeshRenderInfo{&*mesh.teamVertices, matrix, mvpMatrix, shaded, unitTeamTextureAtlases.at(playerColorIndex.value).get(), percentComplete, unitY});
+            if (playerColorIndex.value < unitTeamTextureAtlases.size())
+            {
+                batch.push_back(UnitBuildingMeshRenderInfo{&*mesh.teamVertices, matrix, mvpMatrix, shaded, unitTeamTextureAtlases[playerColorIndex.value].get(), percentComplete, unitY});
+            }
         }
     }
 
@@ -622,7 +631,9 @@ namespace rwe
 
         if (auto objectInfo = std::get_if<FeatureObjectInfo>(&featureMediaInfo.renderInfo); objectInfo != nullptr)
         {
-            const auto& modelDefinition = modelDefinitions.at(objectInfo->objectName);
+            auto modelDefIt = modelDefinitions.find(objectInfo->objectName);
+            if (modelDefIt == modelDefinitions.end()) { return; }
+            const auto& modelDefinition = modelDefIt->second;
             auto matrix = Matrix4f::translation(simVectorToFloat(feature.position)) * Matrix4f::rotationY(toRadians(feature.rotation).value);
             drawProjectileUnitMesh(gameMediaDatabase, viewProjectionMatrix, objectInfo->objectName, modelDefinition, matrix, PlayerColorIndex(0), true, unitTextureAtlas, unitTeamTextureAtlases, batch);
         }
@@ -665,7 +676,9 @@ namespace rwe
             return;
         }
 
-        const auto& modelDefinition = modelDefinitions.at(objectInfo->objectName);
+        auto modelDefIt = modelDefinitions.find(objectInfo->objectName);
+        if (modelDefIt == modelDefinitions.end()) { return; }
+        const auto& modelDefinition = modelDefIt->second;
 
         const auto& position = feature.position;
         auto matrix = Matrix4f::translation(simVectorToFloat(position)) * Matrix4f::rotationY(toRadians(feature.rotation).value);
@@ -976,8 +989,9 @@ namespace rwe
                     auto transform = Matrix4f::translation(position)
                         * pointDirection(simVectorToFloat(projectile.velocity).normalized())
                         * rotationModeToMatrix(m.rotationMode);
-                    const auto& modelDefinition = sim.unitModelDefinitions.at(m.objectName);
-                    drawProjectileUnitMesh(gameMediaDatabase, viewProjectionMatrix, m.objectName, modelDefinition, transform, PlayerColorIndex(0), false, unitTextureAtlas, unitTeamTextureAtlases, unitMeshBatch);
+                    const auto* modelDefinition = sim.tryGetUnitModelDefinition(m.objectName);
+                    if (!modelDefinition) { return; }
+                    drawProjectileUnitMesh(gameMediaDatabase, viewProjectionMatrix, m.objectName, *modelDefinition, transform, PlayerColorIndex(0), false, unitTextureAtlas, unitTeamTextureAtlases, unitMeshBatch);
                 },
                 [&](const ProjectileRenderTypeSprite& s) {
                     Vector3f snappedPosition(
