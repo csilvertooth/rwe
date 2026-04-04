@@ -2546,12 +2546,10 @@ namespace rwe
 
     void GameScene::onMouseWheel(MouseWheelEvent event)
     {
-        // Scroll wheel always controls zoom — entering megamap if zooming out
         if (event.y != 0 && isCursorOverWorld())
         {
             if (!megamapActive && event.y < 0)
             {
-                // Scrolling down enters megamap mode
                 megamapActive = true;
                 savedCameraState = worldCameraState;
             }
@@ -2564,10 +2562,49 @@ namespace rwe
                 auto invVP = computeInverseViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height());
                 auto worldBefore = invVP * Vector3f(clipPos.x, clipPos.y, 0.0f);
 
-                // Apply smooth zoom
-                auto zoomFactor = event.y > 0 ? 1.12f : 0.89f;
-                worldCameraState.zoom *= zoomFactor;
-                worldCameraState.zoom = std::clamp(worldCameraState.zoom, 0.05f, 1.5f);
+                if (isShiftDown())
+                {
+                    // Shift+scroll = free zoom (infinite)
+                    auto zoomFactor = event.y > 0 ? 1.12f : 0.89f;
+                    worldCameraState.zoom *= zoomFactor;
+                    worldCameraState.zoom = std::clamp(worldCameraState.zoom, 0.02f, 4.0f);
+                }
+                else
+                {
+                    // Normal scroll = snap between presets
+                    // Compute the full-map zoom level
+                    auto terrainW = simScalarToFloat(simulation.terrain.rightCutoffInWorldUnits()) - simScalarToFloat(simulation.terrain.leftInWorldUnits());
+                    auto terrainH = simScalarToFloat(simulation.terrain.bottomCutoffInWorldUnits()) - simScalarToFloat(simulation.terrain.topInWorldUnits());
+                    auto viewW = static_cast<float>(worldViewport.width());
+                    auto viewH = static_cast<float>(worldViewport.height());
+                    auto fullMapZoom = std::min(viewW / terrainW, viewH / terrainH) * 0.95f;
+
+                    float presets[] = {fullMapZoom, 0.5f, 1.0f, 2.0f};
+                    int numPresets = 4;
+
+                    // Find closest preset to current zoom
+                    int closest = 0;
+                    float closestDist = std::abs(worldCameraState.zoom - presets[0]);
+                    for (int i = 1; i < numPresets; ++i)
+                    {
+                        float dist = std::abs(worldCameraState.zoom - presets[i]);
+                        if (dist < closestDist)
+                        {
+                            closestDist = dist;
+                            closest = i;
+                        }
+                    }
+
+                    // Step to next/previous preset
+                    if (event.y > 0 && closest < numPresets - 1)
+                    {
+                        worldCameraState.zoom = presets[closest + 1];
+                    }
+                    else if (event.y < 0 && closest > 0)
+                    {
+                        worldCameraState.zoom = presets[closest - 1];
+                    }
+                }
 
                 // Recompute world position under cursor after zoom
                 auto invVPAfter = computeInverseViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height());
@@ -2577,8 +2614,8 @@ namespace rwe
                 worldCameraState.position.x += worldBefore.x - worldAfter.x;
                 worldCameraState.position.z += worldBefore.z - worldAfter.z;
 
-                // Exit megamap when zoomed back to normal
-                if (worldCameraState.zoom >= 1.0f)
+                // Exit megamap when zoomed past 1x
+                if (worldCameraState.zoom >= 1.0f && !isShiftDown())
                 {
                     megamapActive = false;
                     worldCameraState.zoom = 1.0f;
