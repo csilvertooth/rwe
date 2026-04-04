@@ -831,7 +831,7 @@ namespace rwe
             newPosition.y = sim->terrain.getHeightAt(newPosition.x, newPosition.z);
             if (unitInfo.definition->floater || unitInfo.definition->canHover)
             {
-                newPosition.y = rweMax(newPosition.y, sim->terrain.getSeaLevel());
+                newPosition.y = rweMax(newPosition.y, sim->terrain.getSeaLevel() - SimScalar(unitInfo.definition->waterline));
             }
 
             if (!tryApplyMovementToPosition(unitInfo, newPosition))
@@ -860,8 +860,9 @@ namespace rwe
 
                 if (unitInfo.definition->floater || unitInfo.definition->canHover)
                 {
-                    newPos1.y = rweMax(newPos1.y, sim->terrain.getSeaLevel());
-                    newPos2.y = rweMax(newPos2.y, sim->terrain.getSeaLevel());
+                    auto waterY = sim->terrain.getSeaLevel() - SimScalar(unitInfo.definition->waterline);
+                    newPos1.y = rweMax(newPos1.y, waterY);
+                    newPos2.y = rweMax(newPos2.y, waterY);
                 }
 
                 if (!tryApplyMovementToPosition(unitInfo, newPos1))
