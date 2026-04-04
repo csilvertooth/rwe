@@ -1728,16 +1728,107 @@ namespace rwe
         {
             startTrack();
         }
-        else if (keysym.key == SDLK_TAB || keysym.key == SDLK_ESCAPE)
+        else if (keysym.key == SDLK_F2)
         {
+            // F2 = Options menu (TA standard)
             optionsMenuVisible = !optionsMenuVisible;
-            // Only pause in single player (1 human player)
             auto humanCount = std::count_if(simulation.players.begin(), simulation.players.end(),
                 [](const auto& p) { return p.type == GamePlayerType::Human; });
             if (humanCount <= 1)
             {
                 gamePaused = optionsMenuVisible;
             }
+        }
+        else if (keysym.key == SDLK_ESCAPE)
+        {
+            // Escape = deselect or cancel cursor mode (TA standard)
+            if (optionsMenuVisible)
+            {
+                optionsMenuVisible = false;
+                gamePaused = false;
+            }
+            else if (!std::holds_alternative<NormalCursorMode>(cursorMode.getValue()))
+            {
+                cursorMode.next(NormalCursorMode());
+                dgunMode = false;
+            }
+            else
+            {
+                clearUnitSelection();
+            }
+        }
+        else if (keysym.key == SDLK_PAUSE)
+        {
+            // Pause key = toggle pause
+            auto humanCount = std::count_if(simulation.players.begin(), simulation.players.end(),
+                [](const auto& p) { return p.type == GamePlayerType::Human; });
+            if (humanCount <= 1)
+            {
+                gamePaused = !gamePaused;
+            }
+        }
+        else if (keysym.key == SDLK_E && !isCtrlDown())
+        {
+            // E = Reclaim mode (enter attack cursor, reclaim on click)
+            // TODO: implement reclaim cursor mode
+        }
+        else if (keysym.key == SDLK_R && !isCtrlDown())
+        {
+            // R = Repair (same as guard for builders)
+            if (std::holds_alternative<GuardCursorMode>(cursorMode.getValue()))
+            {
+                cursorMode.next(NormalCursorMode());
+            }
+            else
+            {
+                cursorMode.next(GuardCursorMode());
+            }
+        }
+        else if (keysym.key == SDLK_M)
+        {
+            // M = Move
+            if (std::holds_alternative<MoveCursorMode>(cursorMode.getValue()))
+            {
+                cursorMode.next(NormalCursorMode());
+            }
+            else
+            {
+                cursorMode.next(MoveCursorMode());
+            }
+        }
+        else if (keysym.key == SDLK_G)
+        {
+            // G = Guard
+            if (std::holds_alternative<GuardCursorMode>(cursorMode.getValue()))
+            {
+                cursorMode.next(NormalCursorMode());
+            }
+            else
+            {
+                cursorMode.next(GuardCursorMode());
+            }
+        }
+        else if (keysym.key == SDLK_P && !isCtrlDown())
+        {
+            // P = Patrol (move order for now)
+            if (std::holds_alternative<MoveCursorMode>(cursorMode.getValue()))
+            {
+                cursorMode.next(NormalCursorMode());
+            }
+            else
+            {
+                cursorMode.next(MoveCursorMode());
+            }
+        }
+        else if (keysym.key == SDLK_EQUALS || keysym.key == SDLK_KP_PLUS)
+        {
+            // + = Increase game speed
+            gameSpeed = std::min(gameSpeed + 0.25f, 10.0f);
+        }
+        else if (keysym.key == SDLK_MINUS || keysym.key == SDLK_KP_MINUS)
+        {
+            // - = Decrease game speed
+            gameSpeed = std::max(gameSpeed - 0.25f, 0.25f);
         }
         else if (keysym.key == SDLK_C)
         {
