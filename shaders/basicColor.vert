@@ -1,9 +1,9 @@
-#version 150
+#version 410 core
 
 uniform mat4 mvpMatrix;
 
-in vec3 position;
-in vec3 color;
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec3 color;
 out vec3 fragColor;
 
 void main() {

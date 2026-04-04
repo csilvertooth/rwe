@@ -182,14 +182,19 @@ namespace rwe
 
         LOG_INFO << "Initializing OpenGL context";
 
-        auto glContextResult = createOpenGlContext(sdlContext, window.get(), OpenGlVersionInfo(3, 2, OpenGlProfile::Core));
+        auto glContextResult = createOpenGlContext(sdlContext, window.get(), OpenGlVersionInfo(4, 1, OpenGlProfile::Core));
         if (!glContextResult)
         {
-            LOG_ERROR << "Failed to create preferred OpenGL context: " << glContextResult.getErr();
-            glContextResult = createOpenGlContext(sdlContext, window.get(), OpenGlVersionInfo(3, 0, OpenGlProfile::Compatibility));
+            LOG_WARN << "Failed to create OpenGL 4.1 context: " << glContextResult.getErr() << ", falling back to 3.2";
+            glContextResult = createOpenGlContext(sdlContext, window.get(), OpenGlVersionInfo(3, 2, OpenGlProfile::Core));
             if (!glContextResult)
             {
-                throw std::runtime_error(glContextResult.getErr());
+                LOG_WARN << "Failed to create OpenGL 3.2 context: " << glContextResult.getErr() << ", falling back to 3.0 compatibility";
+                glContextResult = createOpenGlContext(sdlContext, window.get(), OpenGlVersionInfo(3, 0, OpenGlProfile::Compatibility));
+                if (!glContextResult)
+                {
+                    throw std::runtime_error(glContextResult.getErr());
+                }
             }
         }
 
@@ -206,6 +211,22 @@ namespace rwe
         LOG_INFO << "OpenGL vendor: " << glGetString(GL_VENDOR);
         LOG_INFO << "OpenGL renderer: " << glGetString(GL_RENDERER);
         LOG_INFO << "OpenGL shading language version: " << glGetString(GL_SHADING_LANGUAGE_VERSION);
+        // Log GPU capabilities for optimization decisions
+        GLint majorVer, minorVer;
+        glGetIntegerv(GL_MAJOR_VERSION, &majorVer);
+        glGetIntegerv(GL_MINOR_VERSION, &minorVer);
+        LOG_INFO << "OpenGL context version: " << majorVer << "." << minorVer;
+
+        GLint maxUboSize, maxUboBindings, maxTextureUnits;
+        glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &maxUboSize);
+        glGetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &maxUboBindings);
+        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &maxTextureUnits);
+        LOG_INFO << "GPU capabilities: UBO max=" << maxUboSize << " bytes, UBO bindings=" << maxUboBindings << ", texture units=" << maxTextureUnits;
+
+        bool hasSSBO = (majorVer > 4 || (majorVer == 4 && minorVer >= 3));
+        bool hasPersistentMap = (majorVer > 4 || (majorVer == 4 && minorVer >= 4));
+        LOG_INFO << "GPU features: SSBO=" << (hasSSBO ? "yes" : "no") << ", persistent mapping=" << (hasPersistentMap ? "yes" : "no");
+
         LOG_DEBUG << "OpenGL extensions:";
         int openGlExtensionCount;
         glGetIntegerv(GL_NUM_EXTENSIONS, &openGlExtensionCount);

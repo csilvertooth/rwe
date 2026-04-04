@@ -1,9 +1,9 @@
-#version 150
+#version 410 core
 
 in vec2 fragTexCoord;
 in float height;
 in vec3 worldNormal;
-out vec4 outColor;
+layout(location = 0) out vec4 outColor;
 
 uniform sampler2D textureSampler;
 uniform float unitY;

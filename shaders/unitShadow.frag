@@ -1,8 +1,8 @@
-#version 150
+#version 410 core
 
 in vec2 fragTexCoord;
 in float height;
-out vec4 outColor;
+layout(location = 0) out vec4 outColor;
 
 uniform float groundHeight;
 

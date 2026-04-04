@@ -1,9 +1,9 @@
-#version 150
+#version 410 core
 
 uniform mat4 mvpMatrix;
 
-in vec3 position;
-in vec3 texCoord;
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec3 texCoord;
 
 out vec3 fragTexCoord;
 

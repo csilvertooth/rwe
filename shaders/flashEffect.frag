@@ -1,7 +1,7 @@
-#version 150
+#version 410 core
 
 in vec2 fragTexCoord;
-out vec4 outColor;
+layout(location = 0) out vec4 outColor;
 
 uniform float intensity;
 uniform vec3 color;
