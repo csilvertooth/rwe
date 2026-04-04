@@ -149,35 +149,15 @@ namespace rwe
             throw std::runtime_error(SDL_GetError());
         }
 
-        if (fullscreen)
-        {
-            SDL_DisplayMode targetMode;
-            auto displayID = sdlContext->getWindowDisplayIndex(window.get());
-            if (displayID == 0)
-            {
-                throw std::runtime_error(SDL_GetError());
-            }
-
-            if (!sdlContext->getClosestDisplayMode(displayID, desiredWindowWidth, desiredWindowHeight, 0.0f, &targetMode))
-            {
-                throw std::runtime_error(SDL_GetError());
-            }
-
-            if (!sdlContext->setWindowDisplayMode(window.get(), &targetMode))
-            {
-                throw std::runtime_error(SDL_GetError());
-            }
-            sdlContext->setWindowSize(window.get(), desiredWindowWidth, desiredWindowHeight);
-        }
-
         // Prevent the mouse from leaving the window.
         // We rely on nudging the edges of the screen to pan the camera,
         // so this is necessary for the game to work.
         sdlContext->setWindowGrab(window.get(), true);
 
+        // Use pixel size for viewport (handles Retina/HiDPI correctly)
         int windowWidth;
         int windowHeight;
-        sdlContext->getWindowSize(window.get(), &windowWidth, &windowHeight);
+        sdlContext->getWindowSizeInPixels(window.get(), &windowWidth, &windowHeight);
         Viewport viewport(0, 0, windowWidth, windowHeight);
 
         LOG_INFO << "Initializing OpenGL context";
