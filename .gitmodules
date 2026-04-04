@@ -28,3 +28,6 @@
 [submodule "libs/rmlui"]
 	path = libs/rmlui
 	url = https://github.com/mikke89/RmlUi.git
+[submodule "libs/GameNetworkingSockets"]
+	path = libs/GameNetworkingSockets
+	url = https://github.com/ValveSoftware/GameNetworkingSockets.git
