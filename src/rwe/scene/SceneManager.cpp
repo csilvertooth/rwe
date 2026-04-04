@@ -1,4 +1,5 @@
 #include "SceneManager.h"
+#include <rwe/util/SimpleLogger.h>
 
 namespace rwe
 {
@@ -153,7 +154,14 @@ namespace rwe
                 imGuiContext->io->ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
             }
             imGuiContext->newFrame(window);
-            currentScene->update(timeElapsed);
+            try
+            {
+                currentScene->update(timeElapsed);
+            }
+            catch (const std::exception& ex)
+            {
+                LOG_ERROR << "Exception in scene update: " << ex.what();
+            }
             if (showDemoWindow)
             {
                 ImGui::ShowDemoWindow(&showDemoWindow);
@@ -162,7 +170,14 @@ namespace rwe
             imGuiContext->render();
 
             graphics->clear();
-            currentScene->render();
+            try
+            {
+                currentScene->render();
+            }
+            catch (const std::exception& ex)
+            {
+                LOG_ERROR << "Exception in scene render: " << ex.what();
+            }
 
             if (!imGuiContext->io->WantCaptureMouse)
             {
