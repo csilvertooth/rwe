@@ -3018,19 +3018,9 @@ namespace rwe
             return;
         }
 
-        if (arg == "ARMY")
-        {
-            // Spawn a variety of units around the cursor for testing
+        auto spawnUnitList = [&](const std::vector<std::string>& unitList) {
             if (auto terrainPos = getMouseTerrainCoordinate())
             {
-                auto& player = simulation.getPlayer(localPlayerId);
-                auto side = player.side;
-                std::transform(side.begin(), side.end(), side.begin(), ::toupper);
-
-                std::vector<std::string> armUnits = {"ARMCOM", "ARMPW", "ARMPW", "ARMPW", "ARMROCK", "ARMROCK", "ARMJETH", "ARMHAM", "ARMFLASH", "ARMSTUMP", "ARMBULL", "ARMFHAWK", "ARMBRAWL", "ARMLAB", "ARMSOLAR", "ARMMEX"};
-                std::vector<std::string> coreUnits = {"CORCOM", "CORAK", "CORAK", "CORAK", "CORROCK", "CORROCK", "CORTHUD", "CORLEVLR", "CORGATOR", "CORRAID", "CORSUMO", "CORVENG", "CORAPE", "CORLAB", "CORSOLAR", "CORMEX"};
-
-                auto& unitList = (side == "ARM") ? armUnits : coreUnits;
                 int i = 0;
                 for (const auto& unitType : unitList)
                 {
@@ -3038,14 +3028,65 @@ namespace rwe
                     {
                         continue;
                     }
-                    auto offsetX = SimScalar((i % 4) * 60 - 90);
-                    auto offsetZ = SimScalar((i / 4) * 60 - 90);
+                    auto offsetX = SimScalar((i % 6) * 50 - 125);
+                    auto offsetZ = SimScalar((i / 6) * 50 - 125);
                     auto spawnPos = *terrainPos + SimVector(offsetX, 0_ss, offsetZ);
                     spawnPos.y = simulation.terrain.getHeightAt(spawnPos.x, spawnPos.z);
                     spawnCompletedUnit(unitType, localPlayerId, spawnPos);
                     ++i;
                 }
             }
+        };
+
+        auto getSide = [&]() {
+            auto& player = simulation.getPlayer(localPlayerId);
+            auto side = player.side;
+            std::transform(side.begin(), side.end(), side.begin(), ::toupper);
+            return side;
+        };
+
+        if (arg == "ARMY")
+        {
+            auto side = getSide();
+            std::vector<std::string> armUnits = {"ARMCOM", "ARMPW", "ARMPW", "ARMPW", "ARMROCK", "ARMROCK", "ARMJETH", "ARMHAM", "ARMFLASH", "ARMSTUMP", "ARMBULL", "ARMFHAWK", "ARMBRAWL", "ARMLAB", "ARMSOLAR", "ARMMEX"};
+            std::vector<std::string> coreUnits = {"CORCOM", "CORAK", "CORAK", "CORAK", "CORROCK", "CORROCK", "CORTHUD", "CORLEVLR", "CORGATOR", "CORRAID", "CORSUMO", "CORVENG", "CORAPE", "CORLAB", "CORSOLAR", "CORMEX"};
+            spawnUnitList((side == "ARM") ? armUnits : coreUnits);
+            return;
+        }
+
+        if (arg == "AIR")
+        {
+            auto side = getSide();
+            std::vector<std::string> armAir = {"ARMFHAWK", "ARMFHAWK", "ARMBRAWL", "ARMBRAWL", "ARMHAWK", "ARMHAWK", "ARMTHUND", "ARMTHUND", "ARMATLAS", "ARMPNIX", "ARMKAM", "ARMLANCE"};
+            std::vector<std::string> coreAir = {"CORVENG", "CORVENG", "CORAPE", "CORAPE", "CORVAMP", "CORVAMP", "CORSB", "CORSB", "CORVALKY", "CORSHAD", "CORKAM", "CORHUNT"};
+            spawnUnitList((side == "ARM") ? armAir : coreAir);
+            return;
+        }
+
+        if (arg == "NAVAL")
+        {
+            auto side = getSide();
+            std::vector<std::string> armNaval = {"ARMSY", "ARMSUB", "ARMSUB", "ARMPT", "ARMPT", "ARMROY", "ARMBATS", "ARMCRUS", "ARMMLS", "ARMSEA"};
+            std::vector<std::string> coreNaval = {"CORSY", "CORSUB", "CORSUB", "CORPT", "CORPT", "CORROY", "CORBATS", "CORCRUS", "CORMLS", "CORSEA"};
+            spawnUnitList((side == "ARM") ? armNaval : coreNaval);
+            return;
+        }
+
+        if (arg == "HOVER")
+        {
+            auto side = getSide();
+            std::vector<std::string> armHover = {"ARMSH", "ARMSH", "ARMAH", "ARMAH", "ARMANAC", "ARMANAC", "ARMHP"};
+            std::vector<std::string> coreHover = {"CORSH", "CORSH", "CORAH", "CORAH", "CORSNAP", "CORSNAP", "CORHP"};
+            spawnUnitList((side == "ARM") ? armHover : coreHover);
+            return;
+        }
+
+        if (arg == "LAND")
+        {
+            auto side = getSide();
+            std::vector<std::string> armLand = {"ARMPW", "ARMPW", "ARMPW", "ARMROCK", "ARMROCK", "ARMJETH", "ARMHAM", "ARMWAR", "ARMFLASH", "ARMSTUMP", "ARMBULL", "ARMMART", "ARMYORK", "ARMSAM", "ARMMERL", "ARMFBOY"};
+            std::vector<std::string> coreLand = {"CORAK", "CORAK", "CORAK", "CORROCK", "CORROCK", "CORTHUD", "CORLEVLR", "CORCAN", "CORGATOR", "CORRAID", "CORSUMO", "CORMART", "CORSENT", "CORMIST", "CORTREM", "CORGOL"};
+            spawnUnitList((side == "ARM") ? armLand : coreLand);
             return;
         }
 
