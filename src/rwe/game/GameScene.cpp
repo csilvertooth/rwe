@@ -3717,7 +3717,9 @@ namespace rwe
             match(
                 event,
                 [&](const FireWeaponEvent& e) {
-                    const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(e.weaponType);
+                    auto weaponOpt = gameMediaDatabase.tryGetWeapon(e.weaponType);
+                    if (!weaponOpt) { return; }
+                    const auto& weaponMediaInfo = weaponOpt->get();
 
                     if (e.shotNumber == 0 || weaponMediaInfo.soundTrigger)
                     {
@@ -3848,8 +3850,8 @@ namespace rwe
                     projectileRenderInfos.insert({e.projectileId, ProjectileRenderInfo{getGameTime()}});
                 },
                 [&](const ProjectileDiedEvent& e) {
-                    const auto& weaponMediaInfo = gameMediaDatabase.getWeapon(e.weaponType);
-                    if (weaponMediaInfo.endSmoke)
+                    auto projWeaponOpt = gameMediaDatabase.tryGetWeapon(e.weaponType);
+                    if (projWeaponOpt && projWeaponOpt->get().endSmoke)
                     {
                         createLightSmoke(simVectorToFloat(e.position));
                     }
@@ -3887,6 +3889,11 @@ namespace rwe
 
     void GameScene::doProjectileImpact(const SimVector& position, const std::string& weaponType, ImpactType impactType)
     {
+        // Skip if weapon media doesn't exist (e.g., MEDIUM_UNITEX not loaded)
+        if (!gameMediaDatabase.tryGetWeapon(weaponType))
+        {
+            return;
+        }
         playWeaponImpactSound(simVectorToFloat(position), weaponType, impactType);
         spawnWeaponImpactExplosion(simVectorToFloat(position), weaponType, impactType);
     }
