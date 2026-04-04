@@ -1638,6 +1638,93 @@ namespace rwe
         }
     }
 
+    void GameScene::renderGameOverScreen()
+    {
+        if (!gameOver)
+        {
+            return;
+        }
+
+        auto viewportW = static_cast<float>(sceneContext.viewport->width());
+        auto viewportH = static_cast<float>(sceneContext.viewport->height());
+
+        auto* drawList = ImGui::GetBackgroundDrawList();
+        drawList->AddRectFilled(ImVec2(0, 0), ImVec2(viewportW, viewportH), IM_COL32(0, 0, 0, 180));
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(30.0f, 30.0f));
+
+        auto menuW = 420.0f;
+        ImGui::SetNextWindowPos(ImVec2((viewportW - menuW) * 0.5f, viewportH * 0.15f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(menuW, 0.0f), ImGuiCond_Always);
+        ImGui::Begin("##GameOver", nullptr,
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse
+            | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize);
+
+        // Title
+        auto isVictory = (gameOverMessage == "VICTORY");
+        auto titleColor = isVictory ? ImVec4(0.3f, 1.0f, 0.3f, 1.0f) : ImVec4(1.0f, 0.8f, 0.3f, 1.0f);
+        auto titleSize = ImGui::CalcTextSize(gameOverMessage.c_str());
+        ImGui::SetCursorPosX((menuW - titleSize.x) * 0.5f);
+        ImGui::TextColored(titleColor, "%s", gameOverMessage.c_str());
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Game stats
+        auto gameSeconds = simulation.gameTime.value / 30;
+        auto minutes = gameSeconds / 60;
+        auto seconds = gameSeconds % 60;
+        ImGui::Text("GAME TIME: %u:%02u", minutes, seconds);
+
+        ImGui::Spacing();
+
+        // Per-player stats
+        for (size_t i = 0; i < simulation.players.size(); ++i)
+        {
+            const auto& player = simulation.players[i];
+            auto playerName = player.name.value_or("Player " + std::to_string(i + 1));
+            auto isLocal = (PlayerId(static_cast<unsigned int>(i)) == localPlayerId);
+
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            if (isLocal)
+            {
+                ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "%s (You)", playerName.c_str());
+            }
+            else
+            {
+                ImGui::Text("%s", playerName.c_str());
+            }
+
+            // Count units for this player
+            unsigned int unitCount = 0;
+            for (const auto& [_, unit] : simulation.units)
+            {
+                if (unit.owner.value == i && !unit.isDead())
+                {
+                    ++unitCount;
+                }
+            }
+
+            ImGui::Text("  Units: %u", unitCount);
+            ImGui::Text("  Status: %s", player.status == GamePlayerStatus::Alive ? "Alive" : "Defeated");
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::Button("Exit to Menu", ImVec2(menuW - 60.0f, 36.0f)))
+        {
+            sceneContext.sceneManager->requestExit();
+        }
+
+        ImGui::End();
+        ImGui::PopStyleVar(1);
+    }
+
     void GameScene::onKeyDown(const SDL_KeyboardEvent& keysym)
     {
         if (cheatConsoleActive)
@@ -2754,6 +2841,7 @@ namespace rwe
 
         renderDebugWindow();
         renderOptionsMenu();
+        renderGameOverScreen();
         renderCheatConsole();
     }
 
@@ -3168,18 +3256,25 @@ namespace rwe
 
         updateParticles(gameMediaDatabase, simulation.gameTime, particles);
 
-        auto winStatus = simulation.computeWinStatus();
-        match(
-            winStatus,
-            [&](const WinStatusWon&) {
-                delay(SceneTime(5 * 30), [sm = sceneContext.sceneManager]() { sm->requestExit(); });
-            },
-            [&](const WinStatusDraw&) {
-                delay(SceneTime(5 * 30), [sm = sceneContext.sceneManager]() { sm->requestExit(); });
-            },
-            [&](const WinStatusUndecided&) {
-                // do nothing, game still in progress
-            });
+        if (!gameOver)
+        {
+            auto winStatus = simulation.computeWinStatus();
+            match(
+                winStatus,
+                [&](const WinStatusWon&) {
+                    gameOver = true;
+                    gamePaused = true;
+                    gameOverMessage = "VICTORY";
+                },
+                [&](const WinStatusDraw&) {
+                    gameOver = true;
+                    gamePaused = true;
+                    gameOverMessage = "DRAW";
+                },
+                [&](const WinStatusUndecided&) {
+                    // game still in progress
+                });
+        }
     }
 
     std::optional<UnitId> GameScene::getUnitUnderCursor() const

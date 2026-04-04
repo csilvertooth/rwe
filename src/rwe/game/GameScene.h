@@ -290,6 +290,8 @@ namespace rwe
 
         bool optionsMenuVisible{false};
         bool gamePaused{false};
+        bool gameOver{false};
+        std::string gameOverMessage;
         float gameSpeed{1.0f};
 
         bool cheatConsoleActive{false};
@@ -509,6 +511,7 @@ namespace rwe
 
         void renderDebugWindow();
         void renderOptionsMenu();
+        void renderGameOverScreen();
 
         void renderCheatConsole();
         void processCheatCommand(const std::string& command);
