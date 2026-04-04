@@ -605,14 +605,16 @@ namespace rwe
 
         }
 
-        // draw minimap dots (visible, radar-detected, or owned units)
+        // draw minimap dots — enemy units only shown if in LOS or radar
+        // This is always enforced regardless of fog of war terrain setting.
+        // Fog of war controls terrain darkening; unit visibility is separate.
         for (const auto& [unitId, unit] : simulation.units)
         {
             bool isOwned = unit.isOwnedBy(localPlayerId);
             bool isLOSVisible = simulation.isUnitVisible(localPlayerId, unitId);
             bool isRadarVisible = simulation.isUnitRadarVisible(localPlayerId, unitId);
 
-            if (fogOfWarEnabled && !isOwned && !isLOSVisible && !isRadarVisible)
+            if (!isOwned && !isLOSVisible && !isRadarVisible)
             {
                 continue;
             }
@@ -907,7 +909,7 @@ namespace rwe
         UnitShadowMeshBatch unitShadowMeshBatch;
         for (const auto& [unitId, unit] : simulation.units)
         {
-            if (fogOfWarEnabled && !unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
+            if (!unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
             {
                 continue;
             }
@@ -940,7 +942,7 @@ namespace rwe
         for (const auto& [unitId, unit] : simulation.units)
         {
             // Hide enemy units not in line of sight
-            if (fogOfWarEnabled && !unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
+            if (!unit.isOwnedBy(localPlayerId) && !simulation.isUnitVisible(localPlayerId, unitId))
             {
                 continue;
             }
