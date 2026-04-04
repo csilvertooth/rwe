@@ -1378,7 +1378,11 @@ namespace rwe
           auto damageScale = std::clamp(
               SimScalar(projectile.edgeEffectiveness) + (1_ss - SimScalar(projectile.edgeEffectiveness)) * (1_ss - distFraction),
               0_ss, 1_ss);
-          auto rawDamage = projectile.getDamage(unit.unitType);
+          // Use armorType for damage lookup if available, otherwise unitType
+          auto unitDefIt = unitDefinitions.find(unit.unitType);
+          auto damageKey = (unitDefIt != unitDefinitions.end() && !unitDefIt->second.armorType.empty())
+              ? unitDefIt->second.armorType : unit.unitType;
+          auto rawDamage = projectile.getDamage(damageKey);
           auto scaledDamage = simScalarToUInt(SimScalar(rawDamage) * damageScale);
           applyDamage(*u, scaledDamage, projectile.sourceUnit, projectile.paralyzer); });
 
@@ -1405,9 +1409,12 @@ namespace rwe
                 continue;
             }
 
-            // apply appropriate damage
+            // apply appropriate damage using armorType for lookup
             auto damageScale = std::clamp(1_ss - (rweSqrt(unitDistanceSquared) / radius), 0_ss, 1_ss);
-            auto rawDamage = projectile.getDamage(unit.unitType);
+            auto flyDefIt = unitDefinitions.find(unit.unitType);
+            auto flyDamageKey = (flyDefIt != unitDefinitions.end() && !flyDefIt->second.armorType.empty())
+                ? flyDefIt->second.armorType : unit.unitType;
+            auto rawDamage = projectile.getDamage(flyDamageKey);
             auto scaledDamage = simScalarToUInt(SimScalar(rawDamage) * damageScale);
             applyDamage(flyingUnitId, scaledDamage, projectile.sourceUnit, projectile.paralyzer);
         }
@@ -1592,6 +1599,82 @@ namespace rwe
                     }
                 }
             }
+        }
+    }
+
+    void GameSimulation::updateTeleporters()
+    {
+        // Find all teleporter buildings
+        std::vector<std::pair<UnitId, SimVector>> teleporters;
+        for (const auto& [unitId, unit] : units)
+        {
+            if (unit.isDead() || !unit.activated)
+            {
+                continue;
+            }
+            auto defIt = unitDefinitions.find(unit.unitType);
+            if (defIt == unitDefinitions.end() || !defIt->second.teleporter)
+            {
+                continue;
+            }
+            if (unit.isBeingBuilt(defIt->second))
+            {
+                continue;
+            }
+            teleporters.emplace_back(unitId, unit.position);
+        }
+
+        if (teleporters.size() < 2)
+        {
+            return; // need at least 2 teleporters
+        }
+
+        // Check each teleporter for nearby mobile units to teleport
+        for (size_t i = 0; i < teleporters.size(); ++i)
+        {
+            auto& [teleId, telePos] = teleporters[i];
+            auto& teleUnit = getUnitState(teleId);
+
+            // Find the nearest OTHER allied teleporter
+            std::optional<size_t> nearestOther;
+            SimScalar nearestDist = SimScalar(999999);
+            for (size_t j = 0; j < teleporters.size(); ++j)
+            {
+                if (j == i) continue;
+                auto& otherUnit = getUnitState(teleporters[j].first);
+                if (!otherUnit.isOwnedBy(teleUnit.owner)) continue;
+                auto dist = telePos.distanceSquared(teleporters[j].second);
+                if (dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearestOther = j;
+                }
+            }
+
+            if (!nearestOther) continue;
+            auto& destPos = teleporters[*nearestOther].second;
+
+            // Check for mobile units on this teleporter's footprint
+            auto teleDefIt = unitDefinitions.find(teleUnit.unitType);
+            if (teleDefIt == unitDefinitions.end()) continue;
+            auto footprint = computeFootprintRegion(telePos, teleDefIt->second.movementCollisionInfo);
+
+            auto region = occupiedGrid.tryToRegion(footprint);
+            if (!region) continue;
+
+            region->forEach([&](const auto& coords) {
+                auto& cell = occupiedGrid.get(coords);
+                if (!cell.mobileUnitId) return;
+                auto unitOpt = tryGetUnitState(*cell.mobileUnitId);
+                if (!unitOpt) return;
+                auto& mobileUnit = unitOpt->get();
+                if (mobileUnit.isDead() || !mobileUnit.isOwnedBy(teleUnit.owner)) return;
+                if (mobileUnit.insideTransport) return;
+
+                // Teleport the unit
+                mobileUnit.position = destPos;
+                mobileUnit.position.y = terrain.getHeightAt(destPos.x, destPos.z);
+            });
         }
     }
 
@@ -1997,6 +2080,7 @@ namespace rwe
 
         updateProjectiles();
         updateInterceptors();
+        updateTeleporters();
 
         updateFogOfWar();
         updateRadarMap();

@@ -497,6 +497,7 @@ namespace rwe
         void updateRadarMap();
         void initRadarMap();
         void updateInterceptors();
+        void updateTeleporters();
         bool isUnitRadarVisible(PlayerId viewer, UnitId target) const;
 
         std::optional<FeatureDefinitionId> tryGetFeatureDefinitionId(const std::string& featureName) const;
