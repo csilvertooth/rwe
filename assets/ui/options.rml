@@ -3,31 +3,124 @@
     <link type="text/rcss" href="theme.rcss"/>
     <style>
         body {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%;
+            height: 100%;
             background-color: #000000a0;
+            display: block;
+        }
+
+        .panel {
+            width: 500px;
+            margin: 100px auto;
+            background-color: #14141cee;
+            border: 1px solid #363850;
+            padding: 30px;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #8cb4ff;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            font-size: 18px;
+            color: #8cb4ff;
+            margin-bottom: 10px;
+            margin-top: 15px;
+        }
+
+        .separator {
+            height: 1px;
+            background-color: #363850;
+            margin: 15px 0;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px 0;
+            margin: 8px 0;
+            background-color: #2a3050;
+            border: 1px solid #404870;
+            color: #c8d0f0;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background-color: #3a4570;
+            border-color: #5068a0;
+            color: #ffffff;
+        }
+
+        .setting-row {
+            margin: 8px 0;
+            color: #c8d0f0;
+            font-size: 14px;
+        }
+
+        .setting-label {
+            color: #8890b0;
+            margin-bottom: 4px;
+        }
+
+        .tab-bar {
+            margin-bottom: 15px;
+        }
+
+        .tab {
+            display: inline-block;
+            padding: 8px 24px;
+            background-color: #1e2238;
+            border: 1px solid #363850;
+            color: #8890b0;
+            font-size: 14px;
+            margin-right: 4px;
+        }
+
+        .tab:hover {
+            background-color: #2a3050;
+            color: #c8d0f0;
+        }
+
+        .tab.active {
+            background-color: #2a3558;
+            color: #8cb4ff;
+        }
+
+        input.range {
+            width: 300px;
+        }
+
+        select {
+            background-color: #1e2238;
+            border: 1px solid #404870;
+            padding: 6px 8px;
+            color: #c8d0f0;
         }
     </style>
 </head>
 <body>
-    <div class="panel center-panel">
+    <div class="panel">
         <h1>OPTIONS</h1>
         <div class="separator"/>
 
         <div class="tab-bar">
-            <div class="tab active" id="tab-sound">Sound</div>
-            <div class="tab" id="tab-interface">Interface</div>
-            <div class="tab" id="tab-visuals">Visuals</div>
+            <span class="tab active" id="tab-sound">Sound</span>
+            <span class="tab" id="tab-interface">Interface</span>
+            <span class="tab" id="tab-visuals">Visuals</span>
         </div>
 
         <div id="page-sound">
             <h2>Sound</h2>
             <div class="setting-row">
-                <span class="setting-label">Sound Volume</span>
+                <div class="setting-label">Sound Volume</div>
                 <input type="range" min="0" max="100" value="100" id="sound-volume"/>
             </div>
             <div class="setting-row">
-                <span class="setting-label">Music Volume</span>
+                <div class="setting-label">Music Volume</div>
                 <input type="range" min="0" max="100" value="50" id="music-volume"/>
             </div>
         </div>
@@ -35,15 +128,19 @@
         <div id="page-interface" style="display: none;">
             <h2>Interface</h2>
             <div class="setting-row">
-                <span class="setting-label">Scroll Speed</span>
+                <div class="setting-label">Scroll Speed</div>
                 <input type="range" min="25" max="400" value="100" id="scroll-speed"/>
+            </div>
+            <div class="setting-row">
+                <div class="setting-label">Fog of War</div>
+                <input type="checkbox" id="fog-of-war" checked/>
             </div>
         </div>
 
         <div id="page-visuals" style="display: none;">
             <h2>Display</h2>
             <div class="setting-row">
-                <span class="setting-label">Resolution</span>
+                <div class="setting-label">Resolution</div>
                 <select id="resolution">
                     <option value="1280x960">1280 x 960</option>
                     <option value="1920x1080" selected>1920 x 1080</option>
@@ -52,7 +149,7 @@
                 </select>
             </div>
             <div class="setting-row">
-                <span class="setting-label">Fullscreen</span>
+                <div class="setting-label">Fullscreen</div>
                 <input type="checkbox" id="fullscreen"/>
             </div>
         </div>

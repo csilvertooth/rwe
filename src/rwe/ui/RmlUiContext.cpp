@@ -55,18 +55,27 @@ namespace rwe
             return;
         }
 
-        // Get pixel dimensions for context
+        // Use logical window size for RmlUi context (CSS pixels)
+        int logW, logH;
+        SDL_GetWindowSize(window, &logW, &logH);
+
+        // Set pixel viewport on renderer for proper DPI rendering
         int pixW, pixH;
         SDL_GetWindowSizeInPixels(window, &pixW, &pixH);
+        renderInterface->SetViewport(pixW, pixH);
 
-        context = Rml::CreateContext("main", Rml::Vector2i(pixW, pixH));
+        context = Rml::CreateContext("main", Rml::Vector2i(logW, logH));
         if (!context)
         {
             LOG_ERROR << "Failed to create RmlUi context";
             return;
         }
 
-        LOG_INFO << "RmlUi initialized (" << pixW << "x" << pixH << ")";
+        // Set DPI scaling ratio
+        float dpRatio = static_cast<float>(pixW) / static_cast<float>(logW);
+        context->SetDensityIndependentPixelRatio(dpRatio);
+
+        LOG_INFO << "RmlUi initialized (" << logW << "x" << logH << " @ " << dpRatio << "x DPI)";
     }
 
     RmlUiContext::~RmlUiContext()
@@ -163,7 +172,15 @@ namespace rwe
     void RmlUiContext::updateViewport(int width, int height)
     {
         if (!context) return;
-        context->SetDimensions(Rml::Vector2i(width, height));
+        // width/height are pixel dimensions from SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED
         renderInterface->SetViewport(width, height);
+
+        // Get logical size for RmlUi context
+        int logW, logH;
+        SDL_GetWindowSize(window, &logW, &logH);
+        context->SetDimensions(Rml::Vector2i(logW, logH));
+
+        float dpRatio = (logW > 0) ? static_cast<float>(width) / static_cast<float>(logW) : 1.0f;
+        context->SetDensityIndependentPixelRatio(dpRatio);
     }
 }
