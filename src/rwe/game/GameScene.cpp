@@ -2081,6 +2081,18 @@ namespace rwe
                                     }
                                 }
                             }
+                            else if (hoveredFeature && unitIsBuilder(simulation, selectedUnit))
+                            {
+                                // Right-click feature with builder → reclaim
+                                if (isShiftDown())
+                                {
+                                    localPlayerEnqueueUnitOrder(selectedUnit, ReclaimOrder(*hoveredFeature));
+                                }
+                                else
+                                {
+                                    localPlayerIssueUnitOrder(selectedUnit, ReclaimOrder(*hoveredFeature));
+                                }
+                            }
                             else
                             {
                                 auto coord = getMouseTerrainCoordinate();
