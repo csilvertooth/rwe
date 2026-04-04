@@ -1,6 +1,6 @@
 #include "UnitBehaviorService_util.h"
 #include <algorithm>
-
+#include <rwe/geometry/Rectangle2x.h>
 #include <stdexcept>
 
 namespace rwe

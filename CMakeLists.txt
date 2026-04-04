@@ -170,130 +170,42 @@ set(IMGUI_IMPL_FILES
     ${PROJECT_SOURCE_DIR}/libs/imgui/backends/imgui_impl_opengl3.cpp
     )
 
-set(SOURCE_FILES
-    ${IMGUI_IMPL_FILES}
-    ${IMGUI_SOURCE_FILES}
-    src/rwe/AbstractViewport.cpp
-    src/rwe/AbstractViewport.h
-    src/rwe/AudioService.cpp
-    src/rwe/AudioService.h
-    src/rwe/BoxTreeSplit.cpp
-    src/rwe/BoxTreeSplit.h
-    src/rwe/ColorPalette.cpp
-    src/rwe/ColorPalette.h
-    src/rwe/CroppedViewport.cpp
-    src/rwe/CroppedViewport.h
-    src/rwe/CursorService.cpp
-    src/rwe/CursorService.h
-    src/rwe/GlobalConfig.cpp
-    src/rwe/GlobalConfig.h
-    src/rwe/ImGuiContext.cpp
-    src/rwe/ImGuiContext.h
-    src/rwe/LoadingNetworkService.cpp
-    src/rwe/LoadingNetworkService.h
-    src/rwe/LoadingScene.cpp
-    src/rwe/LoadingScene.h
-    src/rwe/LoadingScene_util.cpp
-    src/rwe/LoadingScene_util.h
-    src/rwe/MainMenuModel.cpp
-    src/rwe/MainMenuModel.h
-    src/rwe/MainMenuScene.cpp
-    src/rwe/MainMenuScene.h
-    src/rwe/Mesh.cpp
-    src/rwe/Mesh.h
-    src/rwe/MeshService.cpp
-    src/rwe/MeshService.h
-    src/rwe/PathMapping.cpp
-    src/rwe/PathMapping.h
-    src/rwe/RadiansAngle.cpp
-    src/rwe/RadiansAngle.h
-    src/rwe/RenderService.cpp
-    src/rwe/RenderService.h
-    src/rwe/SceneContext.h
-    src/rwe/SelectionMesh.h
-    src/rwe/ShaderService.cpp
-    src/rwe/ShaderService.h
-    src/rwe/TextureService.cpp
-    src/rwe/TextureService.h
-    src/rwe/UiRenderService.cpp
-    src/rwe/UiRenderService.h
-    src/rwe/Viewport.cpp
-    src/rwe/Viewport.h
-    src/rwe/atlas_util.cpp
-    src/rwe/atlas_util.h
-    src/rwe/camera_util.cpp
-    src/rwe/camera_util.h
-    src/rwe/cob/CobAngle.h
-    src/rwe/cob/CobAngularSpeed.h
-    src/rwe/cob/CobAxis.h
-    src/rwe/cob/CobConstants.h
-    src/rwe/cob/CobEnvironment.cpp
-    src/rwe/cob/CobEnvironment.h
-    src/rwe/cob/CobExecutionContext.cpp
-    src/rwe/cob/CobExecutionContext.h
-    src/rwe/cob/CobFunction.cpp
-    src/rwe/cob/CobFunction.h
-    src/rwe/cob/CobOpCode.h
-    src/rwe/cob/CobPosition.h
-    src/rwe/cob/CobSfxType.h
-    src/rwe/cob/CobSleepDuration.h
-    src/rwe/cob/CobSpeed.h
-    src/rwe/cob/CobThread.cpp
-    src/rwe/cob/CobThread.h
-    src/rwe/cob/CobTime.h
-    src/rwe/cob/CobUnitId.h
-    src/rwe/cob/CobValueId.h
-    src/rwe/cob/cob_util.cpp
-    src/rwe/cob/cob_util.h
-    src/rwe/collections/MinHeap.h
-    src/rwe/collections/SimpleVectorMap.h
-    src/rwe/collections/VectorMap.cpp
-    src/rwe/collections/VectorMap.h
-    src/rwe/events.cpp
-    src/rwe/events.h
-    src/rwe/fixed_point.cpp
-    src/rwe/fixed_point.h
-    src/rwe/float_math.cpp
-    src/rwe/float_math.h
-    src/rwe/game/BuilderGuisDatabase.cpp
-    src/rwe/game/BuilderGuisDatabase.h
-    src/rwe/game/FeatureMediaInfo.cpp
-    src/rwe/game/FeatureMediaInfo.h
-    src/rwe/game/FlashEffect.cpp
-    src/rwe/game/FlashEffect.h
-    src/rwe/game/GameCameraState.cpp
-    src/rwe/game/GameCameraState.h
-    src/rwe/game/GameMediaDatabase.cpp
-    src/rwe/game/GameMediaDatabase.h
-    src/rwe/game/GameNetworkService.cpp
-    src/rwe/game/GameNetworkService.h
-    src/rwe/game/GameScene.cpp
-    src/rwe/game/GameScene.h
-    src/rwe/game/GameScene_util.cpp
-    src/rwe/game/GameScene_util.h
-    src/rwe/game/InGameSoundsInfo.cpp
-    src/rwe/game/InGameSoundsInfo.h
-    src/rwe/game/MapTerrainGraphics.cpp
-    src/rwe/game/MapTerrainGraphics.h
-    src/rwe/game/Particle.cpp
-    src/rwe/game/Particle.h
-    src/rwe/game/PlayerColorIndex.cpp
-    src/rwe/game/PlayerColorIndex.h
-    src/rwe/game/PlayerCommand.h
-    src/rwe/game/PlayerCommandService.cpp
-    src/rwe/game/PlayerCommandService.h
-    src/rwe/game/ProjectileRenderType.h
-    src/rwe/game/SceneTime.cpp
-    src/rwe/game/SceneTime.h
-    src/rwe/game/UnitPieceMeshInfo.cpp
-    src/rwe/game/UnitPieceMeshInfo.h
-    src/rwe/game/UnitSoundType.h
-    src/rwe/game/WeaponMediaInfo.cpp
-    src/rwe/game/WeaponMediaInfo.h
-    src/rwe/game/dump_util.cpp
-    src/rwe/game/dump_util.h
-    src/rwe/game/matrix_util.cpp
-    src/rwe/game/matrix_util.h
+# ============================================================================
+# Sub-library file lists — logically grouped for future independent linking
+# ============================================================================
+
+# librwe_util: Shared utilities, math, geometry, grid, collections
+set(UTIL_FILES
+    src/rwe/util.cpp
+    src/rwe/util.h
+    src/rwe/util/Index.h
+    src/rwe/util/OpaqueField.h
+    src/rwe/util/OpaqueId.h
+    src/rwe/util/OpaqueId_io.h
+    src/rwe/util/OpaqueUnit.h
+    src/rwe/util/Result.h
+    src/rwe/util/SharedHandle.h
+    src/rwe/util/UniqueHandle.h
+    src/rwe/util/safe_lookup.h
+    src/rwe/util/collection_util.h
+    src/rwe/util/match.h
+    src/rwe/util/range_util.h
+    src/rwe/util/rwe_string.cpp
+    src/rwe/util/rwe_string.h
+    src/rwe/util/SimpleLogger.h
+    src/rwe/util/SpanStream.h
+    src/rwe/util/OpaqueArgs.h
+    src/rwe/util/hash_combine.h
+    src/rwe/util/png_write.h
+    src/rwe/math/Matrix4f.h
+    src/rwe/math/Matrix4x.h
+    src/rwe/math/Vector2f.h
+    src/rwe/math/Vector2x.h
+    src/rwe/math/Vector3f.cpp
+    src/rwe/math/Vector3f.h
+    src/rwe/math/Vector3x.h
+    src/rwe/math/rwe_math.cpp
+    src/rwe/math/rwe_math.h
     src/rwe/geometry/BoundingBox3f.h
     src/rwe/geometry/BoundingBox3x.h
     src/rwe/geometry/Circle2f.h
@@ -317,6 +229,45 @@ set(SOURCE_FILES
     src/rwe/grid/Grid.h
     src/rwe/grid/Point.cpp
     src/rwe/grid/Point.h
+    src/rwe/collections/MinHeap.h
+    src/rwe/collections/SimpleVectorMap.h
+    src/rwe/collections/VectorMap.cpp
+    src/rwe/collections/VectorMap.h
+    src/rwe/observable/BehaviorSubject.h
+    src/rwe/observable/Observable.h
+    src/rwe/observable/Subject.h
+    src/rwe/observable/Subscription.h
+    src/rwe/optional_io.h
+    src/rwe/optional_util.h
+    src/rwe/fixed_point.cpp
+    src/rwe/fixed_point.h
+    src/rwe/float_math.cpp
+    src/rwe/float_math.h
+    src/rwe/events.cpp
+    src/rwe/events.h
+    src/rwe/RadiansAngle.cpp
+    src/rwe/RadiansAngle.h
+    src/rwe/BoxTreeSplit.cpp
+    src/rwe/BoxTreeSplit.h
+    src/rwe/ColorPalette.cpp
+    src/rwe/ColorPalette.h
+    src/rwe/Mesh.cpp
+    src/rwe/Mesh.h
+    src/rwe/SelectionMesh.h
+    src/rwe/ip_util.cpp
+    src/rwe/ip_util.h
+    src/rwe/network_util.cpp
+    src/rwe/network_util.h
+    src/rwe/rwe_time.cpp
+    src/rwe/rwe_time.h
+    src/rwe/PathMapping.cpp
+    src/rwe/PathMapping.h
+    src/rwe/GlobalConfig.cpp
+    src/rwe/GlobalConfig.h
+)
+
+# librwe_io: File format parsers (HPI, GAF, TDF, 3DO, COB, FBI, TNT, PCX, OTA, GUI)
+set(IO_FILES
     src/rwe/io/_3do/_3do.cpp
     src/rwe/io/_3do/_3do.h
     src/rwe/io/cob/Cob.cpp
@@ -371,27 +322,42 @@ set(SOURCE_FILES
     src/rwe/io/tnt/TntArchive.h
     src/rwe/io/weapontdf/WeaponTdf.cpp
     src/rwe/io/weapontdf/WeaponTdf.h
-    src/rwe/ip_util.cpp
-    src/rwe/ip_util.h
-    src/rwe/math/Matrix4f.h
-    src/rwe/math/Matrix4x.h
-    src/rwe/math/Vector2f.h
-    src/rwe/math/Vector2x.h
-    src/rwe/math/Vector3f.cpp
-    src/rwe/math/Vector3f.h
-    src/rwe/math/Vector3x.h
-    src/rwe/math/rwe_math.cpp
-    src/rwe/math/rwe_math.h
-    src/rwe/mesh_util.cpp
-    src/rwe/mesh_util.h
-    src/rwe/network_util.cpp
-    src/rwe/network_util.h
-    src/rwe/observable/BehaviorSubject.h
-    src/rwe/observable/Observable.h
-    src/rwe/observable/Subject.h
-    src/rwe/observable/Subscription.h
-    src/rwe/optional_io.h
-    src/rwe/optional_util.h
+    src/rwe/vfs/AbstractVirtualFileSystem.h
+    src/rwe/vfs/AbstractVirtualFilesSystem.cpp
+    src/rwe/vfs/CompositeVirtualFileSystem.cpp
+    src/rwe/vfs/CompositeVirtualFileSystem.h
+    src/rwe/vfs/DirectoryFileSystem.cpp
+    src/rwe/vfs/DirectoryFileSystem.h
+    src/rwe/vfs/HpiFileSystem.cpp
+    src/rwe/vfs/HpiFileSystem.h
+    src/rwe/resource_io.cpp
+    src/rwe/resource_io.h
+)
+
+# librwe_sim: Deterministic game simulation, COB VM, pathfinding
+set(SIM_FILES
+    src/rwe/cob/CobAngle.h
+    src/rwe/cob/CobAngularSpeed.h
+    src/rwe/cob/CobAxis.h
+    src/rwe/cob/CobConstants.h
+    src/rwe/cob/CobEnvironment.cpp
+    src/rwe/cob/CobEnvironment.h
+    src/rwe/cob/CobExecutionContext.cpp
+    src/rwe/cob/CobExecutionContext.h
+    src/rwe/cob/CobFunction.cpp
+    src/rwe/cob/CobFunction.h
+    src/rwe/cob/CobOpCode.h
+    src/rwe/cob/CobPosition.h
+    src/rwe/cob/CobSfxType.h
+    src/rwe/cob/CobSleepDuration.h
+    src/rwe/cob/CobSpeed.h
+    src/rwe/cob/CobThread.cpp
+    src/rwe/cob/CobThread.h
+    src/rwe/cob/CobTime.h
+    src/rwe/cob/CobUnitId.h
+    src/rwe/cob/CobValueId.h
+    src/rwe/cob/cob_util.cpp
+    src/rwe/cob/cob_util.h
     src/rwe/pathfinding/AStarPathFinder.h
     src/rwe/pathfinding/AbstractUnitPathFinder.cpp
     src/rwe/pathfinding/AbstractUnitPathFinder.h
@@ -410,58 +376,18 @@ set(SOURCE_FILES
     src/rwe/pathfinding/UnitPerimeterPathFinder.h
     src/rwe/pathfinding/pathfinding_utils.cpp
     src/rwe/pathfinding/pathfinding_utils.h
-    src/rwe/proto/serialization.cpp
-    src/rwe/proto/serialization.h
-    src/rwe/render/FrameBufferHandle.h
-    src/rwe/render/GlIdentifier.h
-    src/rwe/render/GlMesh.cpp
-    src/rwe/render/GlMesh.h
-    src/rwe/render/GraphicsContext.cpp
-    src/rwe/render/GraphicsContext.h
-    src/rwe/render/OpenGlVersion.h
-    src/rwe/render/RenderBufferHandle.h
-    src/rwe/render/ShaderHandle.h
-    src/rwe/render/ShaderMesh.cpp
-    src/rwe/render/ShaderMesh.h
-    src/rwe/render/ShaderProgramHandle.h
-    src/rwe/render/Sprite.cpp
-    src/rwe/render/Sprite.h
-    src/rwe/render/SpriteSeries.cpp
-    src/rwe/render/SpriteSeries.h
-    src/rwe/render/TextureArrayHandle.h
-    src/rwe/render/TextureArrayRegion.h
-    src/rwe/render/TextureHandle.h
-    src/rwe/render/TextureRegion.cpp
-    src/rwe/render/TextureRegion.h
-    src/rwe/render/UniformLocation.h
-    src/rwe/render/VaoHandle.h
-    src/rwe/render/VboHandle.h
-    src/rwe/resource_io.cpp
-    src/rwe/resource_io.h
-    src/rwe/rwe_time.cpp
-    src/rwe/rwe_time.h
-    src/rwe/scene/Scene.h
-    src/rwe/scene/SceneManager.cpp
-    src/rwe/scene/SceneManager.h
-    src/rwe/scene/util.h
-    src/rwe/sdl/SdlContext.h
-    src/rwe/sdl/SdlContextManager.cpp
-    src/rwe/sdl/SdlContextManager.h
-    src/rwe/sdl/SdlException.h
-    src/rwe/sdl/SdlMixerContext.h
-    src/rwe/sdl/SdlMixerException.h
     src/rwe/sim/Energy.cpp
     src/rwe/sim/Energy.h
     src/rwe/sim/FeatureDefinition.cpp
     src/rwe/sim/FeatureDefinition.h
     src/rwe/sim/FeatureDefinitionId.h
     src/rwe/sim/FeatureId.h
+    src/rwe/sim/FogOfWar.cpp
+    src/rwe/sim/FogOfWar.h
     src/rwe/sim/GameHash.cpp
     src/rwe/sim/GameHash.h
     src/rwe/sim/GameHash_util.cpp
     src/rwe/sim/GameHash_util.h
-    src/rwe/sim/FogOfWar.cpp
-    src/rwe/sim/FogOfWar.h
     src/rwe/sim/GameSimulation.cpp
     src/rwe/sim/GameSimulation.h
     src/rwe/sim/GameTime.cpp
@@ -478,6 +404,8 @@ set(SOURCE_FILES
     src/rwe/sim/MovementClassDefinition.h
     src/rwe/sim/MovementClassId.h
     src/rwe/sim/OccupiedGrid.h
+    src/rwe/sim/PlayerColorIndex.cpp
+    src/rwe/sim/PlayerColorIndex.h
     src/rwe/sim/PlayerId.h
     src/rwe/sim/Projectile.cpp
     src/rwe/sim/Projectile.h
@@ -517,6 +445,131 @@ set(SOURCE_FILES
     src/rwe/sim/movement.h
     src/rwe/sim/util.cpp
     src/rwe/sim/util.h
+)
+
+# librwe_render: OpenGL rendering, shaders, sprites
+set(RENDER_FILES
+    src/rwe/render/FrameBufferHandle.h
+    src/rwe/render/GlIdentifier.h
+    src/rwe/render/GlMesh.cpp
+    src/rwe/render/GlMesh.h
+    src/rwe/render/GraphicsContext.cpp
+    src/rwe/render/GraphicsContext.h
+    src/rwe/render/OpenGlVersion.h
+    src/rwe/render/RenderBufferHandle.h
+    src/rwe/render/ShaderHandle.h
+    src/rwe/render/ShaderMesh.cpp
+    src/rwe/render/ShaderMesh.h
+    src/rwe/render/ShaderProgramHandle.h
+    src/rwe/render/Sprite.cpp
+    src/rwe/render/Sprite.h
+    src/rwe/render/SpriteSeries.cpp
+    src/rwe/render/SpriteSeries.h
+    src/rwe/render/TextureArrayHandle.h
+    src/rwe/render/TextureArrayRegion.h
+    src/rwe/render/TextureHandle.h
+    src/rwe/render/TextureRegion.cpp
+    src/rwe/render/TextureRegion.h
+    src/rwe/render/UniformLocation.h
+    src/rwe/render/VaoHandle.h
+    src/rwe/render/VboHandle.h
+)
+
+
+# librwe_game: Integration layer (game scenes, services, UI, SDL, network, proto)
+set(GAME_FILES
+    ${IMGUI_IMPL_FILES}
+    ${IMGUI_SOURCE_FILES}
+    src/rwe/AbstractViewport.cpp
+    src/rwe/AbstractViewport.h
+    src/rwe/AudioService.cpp
+    src/rwe/AudioService.h
+    src/rwe/CroppedViewport.cpp
+    src/rwe/CroppedViewport.h
+    src/rwe/CursorService.cpp
+    src/rwe/CursorService.h
+    src/rwe/ImGuiContext.cpp
+    src/rwe/ImGuiContext.h
+    src/rwe/LoadingNetworkService.cpp
+    src/rwe/LoadingNetworkService.h
+    src/rwe/LoadingScene.cpp
+    src/rwe/LoadingScene.h
+    src/rwe/LoadingScene_util.cpp
+    src/rwe/LoadingScene_util.h
+    src/rwe/MainMenuModel.cpp
+    src/rwe/MainMenuModel.h
+    src/rwe/MainMenuScene.cpp
+    src/rwe/MainMenuScene.h
+    src/rwe/MeshService.cpp
+    src/rwe/MeshService.h
+    src/rwe/RenderService.cpp
+    src/rwe/RenderService.h
+    src/rwe/SceneContext.h
+    src/rwe/ShaderService.cpp
+    src/rwe/ShaderService.h
+    src/rwe/TextureService.cpp
+    src/rwe/TextureService.h
+    src/rwe/UiRenderService.cpp
+    src/rwe/UiRenderService.h
+    src/rwe/Viewport.cpp
+    src/rwe/Viewport.h
+    src/rwe/atlas_util.cpp
+    src/rwe/atlas_util.h
+    src/rwe/camera_util.cpp
+    src/rwe/camera_util.h
+    src/rwe/mesh_util.cpp
+    src/rwe/mesh_util.h
+    src/rwe/vertex_height.cpp
+    src/rwe/vertex_height.h
+    src/rwe/game/BuilderGuisDatabase.cpp
+    src/rwe/game/BuilderGuisDatabase.h
+    src/rwe/game/FeatureMediaInfo.cpp
+    src/rwe/game/FeatureMediaInfo.h
+    src/rwe/game/FlashEffect.cpp
+    src/rwe/game/FlashEffect.h
+    src/rwe/game/GameCameraState.cpp
+    src/rwe/game/GameCameraState.h
+    src/rwe/game/GameMediaDatabase.cpp
+    src/rwe/game/GameMediaDatabase.h
+    src/rwe/game/GameNetworkService.cpp
+    src/rwe/game/GameNetworkService.h
+    src/rwe/game/GameScene.cpp
+    src/rwe/game/GameScene.h
+    src/rwe/game/GameScene_util.cpp
+    src/rwe/game/GameScene_util.h
+    src/rwe/game/InGameSoundsInfo.cpp
+    src/rwe/game/InGameSoundsInfo.h
+    src/rwe/game/MapTerrainGraphics.cpp
+    src/rwe/game/MapTerrainGraphics.h
+    src/rwe/game/Particle.cpp
+    src/rwe/game/Particle.h
+    src/rwe/game/PlayerCommand.h
+    src/rwe/game/PlayerCommandService.cpp
+    src/rwe/game/PlayerCommandService.h
+    src/rwe/game/ProjectileRenderType.h
+    src/rwe/game/SceneTime.cpp
+    src/rwe/game/SceneTime.h
+    src/rwe/game/UnitPieceMeshInfo.cpp
+    src/rwe/game/UnitPieceMeshInfo.h
+    src/rwe/game/UnitSoundType.h
+    src/rwe/game/WeaponMediaInfo.cpp
+    src/rwe/game/WeaponMediaInfo.h
+    src/rwe/game/dump_util.cpp
+    src/rwe/game/dump_util.h
+    src/rwe/game/matrix_util.cpp
+    src/rwe/game/matrix_util.h
+    src/rwe/proto/serialization.cpp
+    src/rwe/proto/serialization.h
+    src/rwe/scene/Scene.h
+    src/rwe/scene/SceneManager.cpp
+    src/rwe/scene/SceneManager.h
+    src/rwe/scene/util.h
+    src/rwe/sdl/SdlContext.h
+    src/rwe/sdl/SdlContextManager.cpp
+    src/rwe/sdl/SdlContextManager.h
+    src/rwe/sdl/SdlException.h
+    src/rwe/sdl/SdlMixerContext.h
+    src/rwe/sdl/SdlMixerException.h
     src/rwe/ui/UiComponent.cpp
     src/rwe/ui/UiComponent.h
     src/rwe/ui/UiFactory.cpp
@@ -537,36 +590,20 @@ set(SOURCE_FILES
     src/rwe/ui/UiSurface.h
     src/rwe/ui/events.cpp
     src/rwe/ui/events.h
-    src/rwe/util.cpp
-    src/rwe/util.h
-    src/rwe/util/Index.h
-    src/rwe/util/OpaqueField.h
-    src/rwe/util/OpaqueId.h
-    src/rwe/util/OpaqueId_io.h
-    src/rwe/util/OpaqueUnit.h
-    src/rwe/util/Result.h
-    src/rwe/util/SharedHandle.h
-    src/rwe/util/UniqueHandle.h
-    src/rwe/util/safe_lookup.h
-    src/rwe/util/collection_util.h
-    src/rwe/util/match.h
-    src/rwe/util/range_util.h
-    src/rwe/util/rwe_string.cpp
-    src/rwe/util/rwe_string.h
-    src/rwe/vertex_height.cpp
-    src/rwe/vertex_height.h
-    src/rwe/vfs/AbstractVirtualFileSystem.h
-    src/rwe/vfs/AbstractVirtualFilesSystem.cpp
-    src/rwe/vfs/CompositeVirtualFileSystem.cpp
-    src/rwe/vfs/CompositeVirtualFileSystem.h
-    src/rwe/vfs/DirectoryFileSystem.cpp
-    src/rwe/vfs/DirectoryFileSystem.h
-    src/rwe/vfs/HpiFileSystem.cpp
-    src/rwe/vfs/HpiFileSystem.h
-    )
+)
+
+# ============================================================================
+# Combined: all sub-libraries compose into the unified librwe static library
+# ============================================================================
+set(SOURCE_FILES
+    ${UTIL_FILES}
+    ${IO_FILES}
+    ${SIM_FILES}
+    ${RENDER_FILES}
+    ${GAME_FILES}
+)
 
 add_library(librwe STATIC ${SOURCE_FILES} ${PROTO_SOURCE_FILES} ${PROTO_HEADER_FILES})
-set_target_properties(librwe PROPERTIES PREFIX "")
 
 if(WIN32)
     target_compile_definitions(librwe PUBLIC RWE_PLATFORM_WINDOWS)

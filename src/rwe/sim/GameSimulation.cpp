@@ -10,6 +10,8 @@
 #include <rwe/util/Index.h>
 #include <rwe/util/collection_util.h>
 #include <rwe/util/match.h>
+#include <rwe/geometry/Rectangle2x.h>
+#include <rwe/math/rwe_math.h>
 #include <rwe/util/rwe_string.h>
 #include <rwe/util/SimpleLogger.h>
 #include <type_traits>

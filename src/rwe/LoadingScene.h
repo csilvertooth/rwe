@@ -9,7 +9,7 @@
 #include <rwe/game/BuilderGuisDatabase.h>
 #include <rwe/game/GameScene.h>
 #include <rwe/game/MapTerrainGraphics.h>
-#include <rwe/game/PlayerColorIndex.h>
+#include <rwe/sim/PlayerColorIndex.h>
 #include <rwe/io/featuretdf/FeatureTdf.h>
 #include <rwe/io/ota/ota.h>
 #include <rwe/io/sidedatatdf/SideData.h>

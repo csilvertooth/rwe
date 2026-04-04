@@ -3,7 +3,7 @@
 #include <array>
 #include <optional>
 #include <rwe/events.h>
-#include <rwe/game/PlayerColorIndex.h>
+#include <rwe/sim/PlayerColorIndex.h>
 #include <rwe/observable/BehaviorSubject.h>
 #include <rwe/render/Sprite.h>
 #include <rwe/sim/Energy.h>

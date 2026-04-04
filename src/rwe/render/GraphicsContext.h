@@ -17,8 +17,7 @@
 #include <rwe/render/TextureArrayHandle.h>
 #include <rwe/render/TextureHandle.h>
 #include <rwe/render/UniformLocation.h>
-#include <rwe/sim/MapFeature.h>
-#include <rwe/sim/MapTerrain.h>
+#include <rwe/grid/Grid.h>
 
 namespace rwe
 {

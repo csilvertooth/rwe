@@ -1,12 +1,3 @@
 #pragma once
-
-#include <rwe/util/OpaqueId.h>
-
-namespace rwe
-{
-    struct PlayerColorIndexTag;
-    struct PlayerColorIndex : public OpaqueId<unsigned int, PlayerColorIndexTag>
-    {
-        explicit PlayerColorIndex(unsigned int value);
-    };
-}
+// Moved to sim/ — this header exists for backward compatibility
+#include <rwe/sim/PlayerColorIndex.h>

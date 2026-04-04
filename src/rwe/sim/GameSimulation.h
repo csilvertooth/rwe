@@ -4,7 +4,7 @@
 #include <rwe/cob/CobUnitId.h>
 #include <rwe/collections/SimpleVectorMap.h>
 #include <rwe/collections/VectorMap.h>
-#include <rwe/game/PlayerColorIndex.h>
+#include <rwe/sim/PlayerColorIndex.h>
 #include <rwe/geometry/BoundingBox3x.h>
 #include <rwe/pathfinding/PathFindingService.h>
 #include <rwe/sim/FeatureDefinition.h>
