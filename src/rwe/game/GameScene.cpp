@@ -2564,15 +2564,7 @@ namespace rwe
 
                 if (isShiftDown())
                 {
-                    // Shift+scroll = free zoom (infinite)
-                    auto zoomFactor = event.y > 0 ? 1.12f : 0.89f;
-                    worldCameraState.zoom *= zoomFactor;
-                    worldCameraState.zoom = std::clamp(worldCameraState.zoom, 0.02f, 4.0f);
-                }
-                else
-                {
-                    // Normal scroll = snap between presets
-                    // Compute the full-map zoom level
+                    // Shift+scroll = snap between presets
                     auto terrainW = simScalarToFloat(simulation.terrain.rightCutoffInWorldUnits()) - simScalarToFloat(simulation.terrain.leftInWorldUnits());
                     auto terrainH = simScalarToFloat(simulation.terrain.bottomCutoffInWorldUnits()) - simScalarToFloat(simulation.terrain.topInWorldUnits());
                     auto viewW = static_cast<float>(worldViewport.width());
@@ -2582,7 +2574,6 @@ namespace rwe
                     float presets[] = {fullMapZoom, 0.5f, 1.0f, 2.0f};
                     int numPresets = 4;
 
-                    // Find closest preset to current zoom
                     int closest = 0;
                     float closestDist = std::abs(worldCameraState.zoom - presets[0]);
                     for (int i = 1; i < numPresets; ++i)
@@ -2595,7 +2586,6 @@ namespace rwe
                         }
                     }
 
-                    // Step to next/previous preset
                     if (event.y > 0 && closest < numPresets - 1)
                     {
                         worldCameraState.zoom = presets[closest + 1];
@@ -2604,6 +2594,13 @@ namespace rwe
                     {
                         worldCameraState.zoom = presets[closest - 1];
                     }
+                }
+                else
+                {
+                    // Normal scroll = smooth infinite zoom
+                    auto zoomFactor = event.y > 0 ? 1.12f : 0.89f;
+                    worldCameraState.zoom *= zoomFactor;
+                    worldCameraState.zoom = std::clamp(worldCameraState.zoom, 0.02f, 4.0f);
                 }
 
                 // Recompute world position under cursor after zoom
@@ -2614,8 +2611,23 @@ namespace rwe
                 worldCameraState.position.x += worldBefore.x - worldAfter.x;
                 worldCameraState.position.z += worldBefore.z - worldAfter.z;
 
+                // When fully zoomed out, center the map
+                auto terrainW2 = simScalarToFloat(simulation.terrain.rightCutoffInWorldUnits()) - simScalarToFloat(simulation.terrain.leftInWorldUnits());
+                auto terrainH2 = simScalarToFloat(simulation.terrain.bottomCutoffInWorldUnits()) - simScalarToFloat(simulation.terrain.topInWorldUnits());
+                auto viewW2 = static_cast<float>(worldViewport.width());
+                auto viewH2 = static_cast<float>(worldViewport.height());
+                auto fullZoom = std::min(viewW2 / terrainW2, viewH2 / terrainH2) * 0.95f;
+
+                if (worldCameraState.zoom <= fullZoom)
+                {
+                    worldCameraState.zoom = fullZoom;
+                    auto centerX = (simScalarToFloat(simulation.terrain.leftInWorldUnits()) + simScalarToFloat(simulation.terrain.rightCutoffInWorldUnits())) * 0.5f;
+                    auto centerZ = (simScalarToFloat(simulation.terrain.topInWorldUnits()) + simScalarToFloat(simulation.terrain.bottomCutoffInWorldUnits())) * 0.5f;
+                    worldCameraState.position = Vector3f(centerX, 0.0f, centerZ);
+                }
+
                 // Exit megamap when zoomed past 1x
-                if (worldCameraState.zoom >= 1.0f && !isShiftDown())
+                if (worldCameraState.zoom >= 1.0f)
                 {
                     megamapActive = false;
                     worldCameraState.zoom = 1.0f;
