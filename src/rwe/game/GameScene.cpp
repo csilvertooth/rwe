@@ -1524,49 +1524,81 @@ namespace rwe
 
         auto viewportW = static_cast<float>(sceneContext.viewport->width());
         auto viewportH = static_cast<float>(sceneContext.viewport->height());
-        auto menuW = 320.0f;
-        auto menuH = 300.0f;
 
-        ImGui::SetNextWindowPos(ImVec2((viewportW - menuW) * 0.5f, (viewportH - menuH) * 0.5f), ImGuiCond_Always);
+        // Dim fullscreen overlay
+        auto* drawList = ImGui::GetBackgroundDrawList();
+        drawList->AddRectFilled(ImVec2(0, 0), ImVec2(viewportW, viewportH), IM_COL32(0, 0, 0, 140));
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
+
+        auto menuW = 380.0f;
+        auto menuH = 0.0f; // auto-size height
+        ImGui::SetNextWindowPos(ImVec2((viewportW - menuW) * 0.5f, viewportH * 0.25f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Always);
-        ImGui::Begin("Options", &optionsMenuVisible, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+        ImGui::Begin("##OptionsMenu", nullptr,
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse
+            | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize);
 
-        if (gamePaused)
-        {
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "PAUSED");
-            ImGui::Separator();
-        }
+        // Title
+        ImGui::PushFont(nullptr);
+        auto titleText = gamePaused ? "ANNIHILATION ENGINE - PAUSED" : "ANNIHILATION ENGINE";
+        auto titleSize = ImGui::CalcTextSize(titleText);
+        ImGui::SetCursorPosX((menuW - titleSize.x) * 0.5f);
+        ImGui::TextColored(ImVec4(0.7f, 0.8f, 1.0f, 1.0f), "%s", titleText);
+        ImGui::PopFont();
 
-        if (ImGui::Button("Resume", ImVec2(menuW - 16.0f, 30.0f)))
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Resume button
+        if (ImGui::Button("Resume Game", ImVec2(menuW - 40.0f, 36.0f)))
         {
             optionsMenuVisible = false;
             gamePaused = false;
         }
 
+        ImGui::Spacing();
         ImGui::Separator();
+        ImGui::Spacing();
 
+        // Settings section
+        ImGui::Text("GAMEPLAY");
+        ImGui::Spacing();
         ImGui::Checkbox("Fog of War", &fogOfWarEnabled);
-        ImGui::Checkbox("True LOS (terrain blocking)", &simulation.trueLOS);
+        ImGui::Checkbox("True Line of Sight", &simulation.trueLOS);
         ImGui::Checkbox("Health Bars", &healthBarsVisible);
 
+        ImGui::Spacing();
         ImGui::Separator();
+        ImGui::Spacing();
 
-        ImGui::SliderFloat("Game Speed", &gameSpeed, 0.25f, 3.0f, "%.2fx");
-        if (ImGui::Button("Reset Speed"))
+        ImGui::Text("SPEED");
+        ImGui::Spacing();
+        ImGui::SliderFloat("##GameSpeed", &gameSpeed, 0.25f, 3.0f, "%.2fx");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset"))
         {
             gameSpeed = 1.0f;
         }
 
+        ImGui::Spacing();
         ImGui::Separator();
+        ImGui::Spacing();
 
-        if (ImGui::Button("Quit Game", ImVec2(menuW - 16.0f, 30.0f)))
+        // Quit button
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.15f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.20f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.10f, 0.10f, 1.0f));
+        if (ImGui::Button("Quit Game", ImVec2(menuW - 40.0f, 36.0f)))
         {
             sceneContext.sceneManager->requestExit();
         }
+        ImGui::PopStyleColor(3);
 
         ImGui::End();
+        ImGui::PopStyleVar(1);
 
-        // If the user closed the window via the X button
         if (!optionsMenuVisible)
         {
             gamePaused = false;
