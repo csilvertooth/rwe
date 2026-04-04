@@ -1688,6 +1688,16 @@ namespace rwe
                 removeVisibility(fogOfWar[unit.owner.value], unit.currentVisibleCells);
             }
 
+            // Remove radar coverage for the dying unit
+            if (!unit.currentRadarCells.empty() && unit.owner.value < radarMap.size())
+            {
+                for (const auto& p : unit.currentRadarCells)
+                {
+                    auto& cell = radarMap[unit.owner.value].grid.get(p.x, p.y);
+                    if (cell > 0) cell--;
+                }
+            }
+
             it = units.erase(it);
         }
 
