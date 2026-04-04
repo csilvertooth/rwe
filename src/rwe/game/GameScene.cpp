@@ -2546,20 +2546,45 @@ namespace rwe
 
     void GameScene::onMouseWheel(MouseWheelEvent event)
     {
-        if (megamapActive)
+        // Scroll wheel always controls zoom — entering megamap if zooming out
+        if (event.y != 0 && isCursorOverWorld())
         {
-            // Scroll wheel zooms in/out on megamap
-            auto zoomFactor = event.y > 0 ? 1.15f : 0.87f;
-            worldCameraState.zoom *= zoomFactor;
-            worldCameraState.zoom = std::clamp(worldCameraState.zoom, 0.05f, 2.0f);
-
-            // If zoomed back to normal view range, exit megamap
-            if (worldCameraState.zoom >= 1.0f)
+            if (!megamapActive && event.y < 0)
             {
-                megamapActive = false;
-                worldCameraState = savedCameraState;
+                // Scrolling down enters megamap mode
+                megamapActive = true;
+                savedCameraState = worldCameraState;
             }
-            return;
+
+            if (megamapActive)
+            {
+                // Zoom toward mouse cursor position
+                auto mousePos = getMousePosition();
+                auto clipPos = worldViewport.toClipSpace(sceneContext.viewport->toOtherViewport(worldViewport, mousePos));
+                auto invVP = computeInverseViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height());
+                auto worldBefore = invVP * Vector3f(clipPos.x, clipPos.y, 0.0f);
+
+                // Apply smooth zoom
+                auto zoomFactor = event.y > 0 ? 1.12f : 0.89f;
+                worldCameraState.zoom *= zoomFactor;
+                worldCameraState.zoom = std::clamp(worldCameraState.zoom, 0.05f, 1.5f);
+
+                // Recompute world position under cursor after zoom
+                auto invVPAfter = computeInverseViewProjectionMatrix(worldCameraState, worldViewport.width(), worldViewport.height());
+                auto worldAfter = invVPAfter * Vector3f(clipPos.x, clipPos.y, 0.0f);
+
+                // Adjust camera so the world point under cursor stays fixed
+                worldCameraState.position.x += worldBefore.x - worldAfter.x;
+                worldCameraState.position.z += worldBefore.z - worldAfter.z;
+
+                // Exit megamap when zoomed back to normal
+                if (worldCameraState.zoom >= 1.0f)
+                {
+                    megamapActive = false;
+                    worldCameraState.zoom = 1.0f;
+                }
+                return;
+            }
         }
         currentPanel->mouseWheel(event);
     }
