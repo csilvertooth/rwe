@@ -15,7 +15,11 @@
             background-color: #14141cf0;
             border: 2px solid #404870;
             padding: 40px;
-            margin: 80px auto 0 auto;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            margin-left: -340px;
+            margin-top: -300px;
         }
 
         h1 {

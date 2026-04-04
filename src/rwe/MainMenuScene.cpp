@@ -14,6 +14,10 @@
 
 namespace rwe
 {
+    // TA panels are authored at 640x480 — use this as the logical coordinate system
+    // but render to the full screen viewport (GL scales automatically)
+    static Viewport scaledMenuViewport(0, 0, 640, 480);
+
     MainMenuScene::MainMenuScene(
         const SceneContext& sceneContext,
         TdfBlock* audioLookup,
@@ -21,10 +25,10 @@ namespace rwe
         float height)
         : sceneContext(sceneContext),
           soundLookup(audioLookup),
-          scaledUiRenderService(sceneContext.graphics, sceneContext.shaders, sceneContext.viewport),
+          scaledUiRenderService(sceneContext.graphics, sceneContext.shaders, &scaledMenuViewport),
           nativeUiRenderService(sceneContext.graphics, sceneContext.shaders, sceneContext.viewport),
           model(),
-          uiFactory(sceneContext.textureService, sceneContext.audioService, soundLookup, sceneContext.vfs, sceneContext.pathMapping, sceneContext.viewport->width(), sceneContext.viewport->height()),
+          uiFactory(sceneContext.textureService, sceneContext.audioService, soundLookup, sceneContext.vfs, sceneContext.pathMapping, 640, 480),
           panelStack(),
           dialogStack(),
           bgm()
@@ -899,8 +903,12 @@ namespace rwe
 
     Point MainMenuScene::toScaledCoordinates(int x, int y) const
     {
-        // Now using native viewport coordinates directly
-        return Point(x, y);
+        // Transform from native screen coordinates to 640x480 logical coordinates
+        auto screenW = static_cast<float>(sceneContext.viewport->width());
+        auto screenH = static_cast<float>(sceneContext.viewport->height());
+        int scaledX = static_cast<int>(static_cast<float>(x) * 640.0f / screenW);
+        int scaledY = static_cast<int>(static_cast<float>(y) * 480.0f / screenH);
+        return Point(scaledX, scaledY);
     }
 
     std::vector<std::string> MainMenuScene::getMapNames()
