@@ -1515,6 +1515,64 @@ namespace rwe
         ImGui::End();
     }
 
+    void GameScene::renderOptionsMenu()
+    {
+        if (!optionsMenuVisible)
+        {
+            return;
+        }
+
+        auto viewportW = static_cast<float>(sceneContext.viewport->width());
+        auto viewportH = static_cast<float>(sceneContext.viewport->height());
+        auto menuW = 320.0f;
+        auto menuH = 300.0f;
+
+        ImGui::SetNextWindowPos(ImVec2((viewportW - menuW) * 0.5f, (viewportH - menuH) * 0.5f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(menuW, menuH), ImGuiCond_Always);
+        ImGui::Begin("Options", &optionsMenuVisible, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+
+        if (gamePaused)
+        {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "PAUSED");
+            ImGui::Separator();
+        }
+
+        if (ImGui::Button("Resume", ImVec2(menuW - 16.0f, 30.0f)))
+        {
+            optionsMenuVisible = false;
+            gamePaused = false;
+        }
+
+        ImGui::Separator();
+
+        ImGui::Checkbox("Fog of War", &fogOfWarEnabled);
+        ImGui::Checkbox("True LOS (terrain blocking)", &simulation.trueLOS);
+        ImGui::Checkbox("Health Bars", &healthBarsVisible);
+
+        ImGui::Separator();
+
+        ImGui::SliderFloat("Game Speed", &gameSpeed, 0.25f, 3.0f, "%.2fx");
+        if (ImGui::Button("Reset Speed"))
+        {
+            gameSpeed = 1.0f;
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::Button("Quit Game", ImVec2(menuW - 16.0f, 30.0f)))
+        {
+            sceneContext.sceneManager->requestExit();
+        }
+
+        ImGui::End();
+
+        // If the user closed the window via the X button
+        if (!optionsMenuVisible)
+        {
+            gamePaused = false;
+        }
+    }
+
     void GameScene::onKeyDown(const SDL_KeyboardEvent& keysym)
     {
         if (cheatConsoleActive)
@@ -1637,6 +1695,17 @@ namespace rwe
         else if (keysym.key == SDLK_T)
         {
             startTrack();
+        }
+        else if (keysym.key == SDLK_TAB || keysym.key == SDLK_ESCAPE)
+        {
+            optionsMenuVisible = !optionsMenuVisible;
+            // Only pause in single player (1 human player)
+            auto humanCount = std::count_if(simulation.players.begin(), simulation.players.end(),
+                [](const auto& p) { return p.type == GamePlayerType::Human; });
+            if (humanCount <= 1)
+            {
+                gamePaused = optionsMenuVisible;
+            }
         }
         else if (keysym.key == SDLK_C)
         {
@@ -2479,21 +2548,29 @@ namespace rwe
         const SceneTime frameCheckInterval(5);
         auto highSceneTime = averageSceneTime + frameTolerance;
         auto lowSceneTime = averageSceneTime <= frameTolerance ? SceneTime{0} : averageSceneTime - frameTolerance;
-        for (; millisecondsBuffer >= SimMillisecondsPerTick; millisecondsBuffer -= SimMillisecondsPerTick)
+        if (!gamePaused)
         {
-            if (sceneTime % frameCheckInterval != SceneTime(0) || sceneTime <= highSceneTime)
+            for (; millisecondsBuffer >= SimMillisecondsPerTick; millisecondsBuffer -= SimMillisecondsPerTick)
             {
-                tryTickGame();
-
-                // simulate an extra frame to catch up every so often
-                if (sceneTime % frameCheckInterval == SceneTime(0) && sceneTime < lowSceneTime)
+                if (sceneTime % frameCheckInterval != SceneTime(0) || sceneTime <= highSceneTime)
                 {
                     tryTickGame();
+
+                    // simulate an extra frame to catch up every so often
+                    if (sceneTime % frameCheckInterval == SceneTime(0) && sceneTime < lowSceneTime)
+                    {
+                        tryTickGame();
+                    }
                 }
             }
         }
+        else
+        {
+            millisecondsBuffer = 0; // don't accumulate time while paused
+        }
 
         renderDebugWindow();
+        renderOptionsMenu();
         renderCheatConsole();
     }
 

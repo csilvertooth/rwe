@@ -288,6 +288,10 @@ namespace rwe
         char unitSpawnText[20]{""};
         int unitSpawnPlayer{0};
 
+        bool optionsMenuVisible{false};
+        bool gamePaused{false};
+        float gameSpeed{1.0f};
+
         bool cheatConsoleActive{false};
         char cheatConsoleText[64]{""};
         size_t cheatConsoleLen{0};
@@ -504,6 +508,7 @@ namespace rwe
         void renderWorld();
 
         void renderDebugWindow();
+        void renderOptionsMenu();
 
         void renderCheatConsole();
         void processCheatCommand(const std::string& command);
