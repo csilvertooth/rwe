@@ -90,8 +90,10 @@ match(someVariant,
 ### Error Handling
 
 - **Loading/initialization**: Exceptions are acceptable (fail fast on bad data)
-- **Runtime/gameplay code**: Never throw. Use `LOG_ERROR` + graceful degradation (return default, skip operation). See `util/safe_lookup.h` for safe map lookups
+- **Runtime/gameplay code**: Never throw. Use `LOG_ERROR` + graceful degradation (return default, skip operation)
+- **Definition lookups**: Use `GameSimulation::tryGetUnitDefinition()`, `tryGetUnitModelDefinition()`, `tryGetWeaponDefinition()`, `tryGetUnitScript()` — these return `const T*` (nullptr on miss, logs error). Never use `.at()` on definition maps in gameplay code.
 - **Optionals**: Always check before calling `.value()` in runtime code
+- **Container access**: Bounds-check vectors before indexing (e.g., `sprites`, `pieces`, `locals`). See `util/safe_lookup.h` for map utilities.
 
 ### Logging
 

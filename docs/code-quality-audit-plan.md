@@ -55,7 +55,8 @@ This codebase was forked from Robot War Engine (RWE). A thorough audit revealed 
 - `src/rwe/sim/Projectile.cpp` — Missing damage entry returns 0 instead of crashing
 - `src/rwe/util/SimpleLogger.h` — Logger fallback: `getLogger()` creates a fallback logger instead of asserting when none is initialized (fixes crash in test context)
 
-**Remaining:** Hundreds of `.at()` calls in hot paths throughout GameScene.cpp, UnitBehaviorService.cpp, and CobExecutionContext.cpp. Best addressed incrementally.
+**Remaining `.at()` conversion — COMPLETED:**
+Converted 99 of 101 dangerous `.at()` calls to graceful error handling across GameSimulation.cpp (27), UnitBehaviorService.cpp (14), GameScene.cpp (35), GameScene_util.cpp (6), and CobExecutionContext.cpp (4). Added safe accessor methods to `GameSimulation`: `tryGetUnitDefinition()`, `tryGetUnitModelDefinition()`, `tryGetWeaponDefinition()`, `tryGetUnitScript()`. The 2 remaining `.at()` calls are safe `players.at()` vector accesses with validated indices.
 
 ---
 
@@ -136,7 +137,6 @@ All groups compose into the unified `librwe` static library via `set(SOURCE_FILE
 
 **Remaining work:**
 - UnitBehaviorService + GameNetworkService tests (Phase 8 continuation)
-- Incremental `.at()` → graceful error handling in remaining hot paths
 
 ---
 
