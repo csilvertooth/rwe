@@ -1311,7 +1311,12 @@ namespace rwe
               return;
           }
 
-          const auto& unit = getUnitState(*u);
+          auto unitOpt = tryGetUnitState(*u);
+          if (!unitOpt)
+          {
+              return;
+          }
+          const auto& unit = unitOpt->get();
 
           // skip dead units
           if (unit.isDead())
@@ -1336,7 +1341,12 @@ namespace rwe
         // Apply damage to flying units
         for (const auto& flyingUnitId : flyingUnitsSet)
         {
-            const auto& unit = getUnitState(flyingUnitId);
+            auto flyingUnitOpt = tryGetUnitState(flyingUnitId);
+            if (!flyingUnitOpt)
+            {
+                continue;
+            }
+            const auto& unit = flyingUnitOpt->get();
 
             // skip units that are dying or dead
             if (!unit.isAlive())

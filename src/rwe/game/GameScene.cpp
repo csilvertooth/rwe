@@ -3632,21 +3632,23 @@ namespace rwe
                 },
 
                 [&](const UnitDiedEvent& e) {
-                    const auto& unitDefinition = simulation.unitDefinitions.at(e.unitType);
-
-                    if (!unitDefinition.explodeAs.empty())
+                    auto unitDefIt = simulation.unitDefinitions.find(e.unitType);
+                    if (unitDefIt != simulation.unitDefinitions.end())
                     {
-                        switch (e.deathType)
+                        const auto& unitDefinition = unitDefIt->second;
+                        if (!unitDefinition.explodeAs.empty())
                         {
-                            case UnitDiedEvent::DeathType::NormalExploded:
-                                doProjectileImpact(e.position, unitDefinition.explodeAs, ImpactType::Normal);
-                                break;
-                            case UnitDiedEvent::DeathType::WaterExploded:
-                                doProjectileImpact(e.position, unitDefinition.explodeAs, ImpactType::Water);
-                                break;
-                            case UnitDiedEvent::DeathType::Deleted:
-                                // do nothing
-                                break;
+                            switch (e.deathType)
+                            {
+                                case UnitDiedEvent::DeathType::NormalExploded:
+                                    doProjectileImpact(e.position, unitDefinition.explodeAs, ImpactType::Normal);
+                                    break;
+                                case UnitDiedEvent::DeathType::WaterExploded:
+                                    doProjectileImpact(e.position, unitDefinition.explodeAs, ImpactType::Water);
+                                    break;
+                                case UnitDiedEvent::DeathType::Deleted:
+                                    break;
+                            }
                         }
                     }
 
