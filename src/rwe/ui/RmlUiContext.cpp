@@ -181,7 +181,20 @@ namespace rwe
             return false;
         }
 
-        return RmlSDL::InputEventHandler(context, window, event);
+        // Forward the event to RmlUi
+        RmlSDL::InputEventHandler(context, window, event);
+
+        // When a document is visible, consume ALL mouse events
+        // so they don't pass through to the game/TA panels behind
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN
+            || event.type == SDL_EVENT_MOUSE_BUTTON_UP
+            || event.type == SDL_EVENT_MOUSE_MOTION
+            || event.type == SDL_EVENT_MOUSE_WHEEL)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     bool RmlUiContext::hasVisibleDocuments() const
