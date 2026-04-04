@@ -694,6 +694,15 @@ namespace rwe
             direction = changeDirectionByRandomAngle(direction, weaponDefinition.sprayAngle);
         }
 
+        // Check energy/metal cost per shot (D-Gun and other expensive weapons)
+        if (weaponDefinition.energyPerShot.value > 0 || weaponDefinition.metalPerShot.value > 0)
+        {
+            if (!sim->addResourceDelta(id, -weaponDefinition.energyPerShot, -weaponDefinition.metalPerShot))
+            {
+                return; // not enough resources to fire
+            }
+        }
+
         auto targetUnit = std::get_if<UnitId>(&attackInfo->target);
         auto targetUnitOption = targetUnit == nullptr ? std::optional<UnitId>() : std::make_optional(*targetUnit);
         sim->spawnProjectile(unit.owner, *weapon, firingPoint, direction, (fireInfo->targetPosition - firingPoint).length(), targetUnitOption, id);
@@ -1045,6 +1054,12 @@ namespace rwe
             },
             [&](const GuardOrder& o) {
                 return handleGuardOrder(unitInfo, o);
+            },
+            [&](const ReclaimOrder& o) {
+                return handleReclaimOrder(unitInfo, o);
+            },
+            [&](const CaptureOrder& o) {
+                return handleCaptureOrder(unitInfo, o);
             });
     }
 
@@ -1202,6 +1217,137 @@ namespace rwe
         {
             navigateTo(unitInfo, guardOrder.target);
             return false;
+        }
+
+        return false;
+    }
+
+    bool UnitBehaviorService::handleReclaimOrder(UnitInfo unitInfo, const ReclaimOrder& reclaimOrder)
+    {
+        if (!unitInfo.definition->builder)
+        {
+            return true; // non-builders can't reclaim
+        }
+
+        return match(
+            reclaimOrder.target,
+            [&](const FeatureId& featureId) -> bool {
+                auto featureIt = sim->features.find(featureId);
+                if (featureIt == sim->features.end())
+                {
+                    return true; // feature gone
+                }
+
+                auto& feature = featureIt->second;
+                const auto& featureDef = sim->getFeatureDefinition(feature.featureName);
+                if (!featureDef.reclaimable)
+                {
+                    return true;
+                }
+
+                // Navigate to the feature
+                if (unitInfo.state->position.distanceSquared(feature.position) > SimScalar(100) * SimScalar(100))
+                {
+                    navigateTo(unitInfo, feature.position);
+                    return false;
+                }
+
+                // In range — reclaim: give resources to player each tick
+                auto metalPerTick = Metal(static_cast<float>(featureDef.metal) * static_cast<float>(unitInfo.definition->workerTimePerTick) / 1000.0f);
+                auto energyPerTick = Energy(static_cast<float>(featureDef.energy) * static_cast<float>(unitInfo.definition->workerTimePerTick) / 1000.0f);
+                sim->addResourceDelta(unitInfo.id, energyPerTick, metalPerTick);
+
+                // TODO: track reclaim progress and remove feature when complete
+                // For now, give resources each tick while near the feature
+
+                return false;
+            },
+            [&](const UnitId& targetId) -> bool {
+                auto targetRef = sim->tryGetUnitState(targetId);
+                if (!targetRef)
+                {
+                    return true; // unit gone
+                }
+
+                auto& target = targetRef->get();
+
+                // Navigate to the unit
+                if (unitInfo.state->position.distanceSquared(target.position) > SimScalar(100) * SimScalar(100))
+                {
+                    navigateTo(unitInfo, targetId);
+                    return false;
+                }
+
+                // In range — drain HP and give resources
+                const auto& targetDef = sim->unitDefinitions.at(target.unitType);
+                auto metalPerTick = Metal(static_cast<float>(targetDef.buildCostMetal.value) * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetDef.buildTime));
+                auto energyPerTick = Energy(static_cast<float>(targetDef.buildCostEnergy.value) * static_cast<float>(unitInfo.definition->workerTimePerTick) / static_cast<float>(targetDef.buildTime));
+                sim->addResourceDelta(unitInfo.id, energyPerTick, metalPerTick);
+
+                if (target.hitPoints > unitInfo.definition->workerTimePerTick)
+                {
+                    target.hitPoints -= unitInfo.definition->workerTimePerTick;
+                }
+                else
+                {
+                    sim->killUnit(targetId);
+                    return true;
+                }
+
+                return false;
+            });
+    }
+
+    bool UnitBehaviorService::handleCaptureOrder(UnitInfo unitInfo, const CaptureOrder& captureOrder)
+    {
+        if (!unitInfo.definition->builder)
+        {
+            return true;
+        }
+
+        auto targetRef = sim->tryGetUnitState(captureOrder.target);
+        if (!targetRef)
+        {
+            return true;
+        }
+
+        auto& target = targetRef->get();
+
+        // Can't capture own units
+        if (target.isOwnedBy(unitInfo.state->owner))
+        {
+            return true;
+        }
+
+        // Navigate to the unit
+        if (unitInfo.state->position.distanceSquared(target.position) > SimScalar(100) * SimScalar(100))
+        {
+            navigateTo(unitInfo, captureOrder.target);
+            return false;
+        }
+
+        // In range — gradually capture (drain HP, then convert when low)
+        const auto& targetDef = sim->unitDefinitions.at(target.unitType);
+        auto captureRate = unitInfo.definition->workerTimePerTick;
+
+        if (target.hitPoints > targetDef.maxHitPoints / 4)
+        {
+            // Drain HP during capture
+            if (target.hitPoints > captureRate)
+            {
+                target.hitPoints -= captureRate;
+            }
+            else
+            {
+                target.hitPoints = 1;
+            }
+        }
+        else
+        {
+            // Below 25% HP — captured! Change owner
+            target.owner = unitInfo.state->owner;
+            target.hitPoints = targetDef.maxHitPoints / 2; // restore some HP
+            return true;
         }
 
         return false;

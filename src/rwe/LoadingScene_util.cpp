@@ -223,6 +223,9 @@ namespace rwe
         weaponDefinition.beamWeapon = tdf.beamWeapon;
         weaponDefinition.beamDuration = SimScalar(tdf.duration);
 
+        weaponDefinition.energyPerShot = Energy(tdf.energyPerShot);
+        weaponDefinition.metalPerShot = Metal(tdf.metalPerShot);
+
         return weaponDefinition;
     }
 

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <optional>
+#include <rwe/sim/Energy.h>
 #include <rwe/sim/GameTime.h>
+#include <rwe/sim/Metal.h>
 #include <rwe/sim/ProjectilePhysicsType.h>
 #include <rwe/sim/SimAngle.h>
 #include <rwe/sim/SimScalar.h>
@@ -67,5 +69,11 @@ namespace rwe
 
         /** Duration of beam display in seconds. */
         SimScalar beamDuration{0};
+
+        /** Energy cost per shot. Deducted from owner when firing. 0 = free. */
+        Energy energyPerShot{0};
+
+        /** Metal cost per shot. Deducted from owner when firing. 0 = free. */
+        Metal metalPerShot{0};
     };
 }

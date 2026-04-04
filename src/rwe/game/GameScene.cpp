@@ -740,6 +740,25 @@ namespace rwe
                         return pos;
                     }
                     return unitOption->get().position;
+                },
+                [&](const ReclaimOrder& o) {
+                    return match(
+                        o.target,
+                        [&](const FeatureId& fid) {
+                            auto featureIt = simulation.features.find(fid);
+                            if (featureIt == simulation.features.end()) { return pos; }
+                            return featureIt->second.position;
+                        },
+                        [&](const UnitId& uid) {
+                            auto unitOption = tryGetUnit(uid);
+                            if (!unitOption) { return pos; }
+                            return unitOption->get().position;
+                        });
+                },
+                [&](const CaptureOrder& o) {
+                    auto unitOption = tryGetUnit(o.target);
+                    if (!unitOption) { return pos; }
+                    return unitOption->get().position;
                 });
 
             auto waypointIcon = match(
@@ -749,7 +768,9 @@ namespace rwe
                 [&](const AttackOrder&) { return std::optional<CursorType>(CursorType::Attack); },
                 [&](const BuggerOffOrder&) { return std::optional<CursorType>(); },
                 [&](const CompleteBuildOrder&) { return std::optional<CursorType>(CursorType::Repair); },
-                [&](const GuardOrder&) { return std::optional<CursorType>(CursorType::Guard); });
+                [&](const GuardOrder&) { return std::optional<CursorType>(CursorType::Guard); },
+                [&](const ReclaimOrder&) { return std::optional<CursorType>(); },
+                [&](const CaptureOrder&) { return std::optional<CursorType>(); });
 
             // draw waypoint icons
             if (waypointIcon)
@@ -774,7 +795,9 @@ namespace rwe
                     [&](const AttackOrder&) { return false; },
                     [&](const BuggerOffOrder&) { return false; },
                     [&](const CompleteBuildOrder&) { return true; },
-                    [&](const GuardOrder&) { return true; });
+                    [&](const GuardOrder&) { return true; },
+                    [&](const ReclaimOrder&) { return true; },
+                    [&](const CaptureOrder&) { return true; });
 
                 if (drawLine)
                 {

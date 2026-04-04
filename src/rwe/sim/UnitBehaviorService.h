@@ -57,6 +57,10 @@ namespace rwe
 
         bool handleGuardOrder(UnitInfo unitInfo, const GuardOrder& guardOrder);
 
+        bool handleReclaimOrder(UnitInfo unitInfo, const ReclaimOrder& reclaimOrder);
+
+        bool handleCaptureOrder(UnitInfo unitInfo, const CaptureOrder& captureOrder);
+
         bool handleBuild(UnitInfo unitInfo, const std::string& unitType);
 
         void clearBuild(UnitInfo unitInfo);

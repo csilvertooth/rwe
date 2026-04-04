@@ -69,6 +69,16 @@ namespace rwe
             auto& out = *cmd->mutable_guard();
             out.set_unit(o.target.value);
         }
+
+        void operator()(const ReclaimOrder&)
+        {
+            // TODO: add protobuf serialization for reclaim orders
+        }
+
+        void operator()(const CaptureOrder&)
+        {
+            // TODO: add protobuf serialization for capture orders
+        }
     };
 
     class WriteUnitCommandVisitor
