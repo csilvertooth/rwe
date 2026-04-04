@@ -14,14 +14,12 @@ namespace rwe
 {
     GameNetworkService::GameNetworkService(
         PlayerId localPlayerId,
-        int port,
+        std::shared_ptr<GnsContext> gnsContext,
         const std::vector<GameNetworkService::EndpointInfo>& endpoints,
         PlayerCommandService* playerCommandService)
         : localPlayerId(localPlayerId),
-          port(port),
-          resolver(ioContext),
-          socket(ioContext),
-          sendTimer(ioContext),
+          gnsContext(std::move(gnsContext)),
+          sockets(this->gnsContext ? this->gnsContext->sockets() : nullptr),
           endpoints(endpoints),
           playerCommandService(playerCommandService)
     {
@@ -29,254 +27,168 @@ namespace rwe
 
     GameNetworkService::~GameNetworkService()
     {
+        running = false;
         if (networkThread.joinable())
         {
-            ioContext.stop();
             networkThread.join();
+        }
+
+        if (!sockets)
+        {
+            return;
+        }
+
+        if (pollGroup != k_HSteamNetPollGroup_Invalid)
+        {
+            sockets->DestroyPollGroup(pollGroup);
+        }
+
+        for (auto& e : endpoints)
+        {
+            if (e.connection != k_HSteamNetConnection_Invalid)
+            {
+                sockets->CloseConnection(e.connection, 0, "GameNetworkService shutdown", false);
+            }
         }
     }
 
     void GameNetworkService::start()
     {
+        if (!sockets || endpoints.empty())
+        {
+            // Single-player mode — no network thread needed
+            return;
+        }
         networkThread = std::thread(&GameNetworkService::run, this);
     }
 
-    void GameNetworkService::submitCommands(SceneTime currentSceneTime, const GameNetworkService::CommandSet& commands)
+    void GameNetworkService::submitCommands(SceneTime sceneTime, const GameNetworkService::CommandSet& commands)
     {
-        asio::post(ioContext,[this, currentSceneTime, commands]() {
-            this->currentSceneTime = currentSceneTime;
-            for (auto& e : endpoints)
-            {
-                e.sendBuffer.push_back(commands);
-            }
-        });
+        if (endpoints.empty())
+        {
+            return;
+        }
+        std::scoped_lock<std::mutex> lock(mutex);
+        currentSceneTime = sceneTime;
+        pendingCommands.push_back(commands);
     }
 
     void GameNetworkService::submitGameHash(GameHash hash)
     {
-        asio::post(ioContext,[this, hash]() {
-            for (auto& e : endpoints)
-            {
-                e.hashSendBuffer.push_back(hash);
-            }
-        });
+        if (endpoints.empty())
+        {
+            return;
+        }
+        std::scoped_lock<std::mutex> lock(mutex);
+        pendingHashes.push_back(hash);
     }
 
     SceneTime GameNetworkService::estimateAvergeSceneTime(SceneTime localSceneTime)
     {
-        std::promise<unsigned int> result;
-        asio::post(ioContext,[this, localSceneTime, &result]() {
-            auto time = getTimestamp();
-            auto otherTimes = choose(endpoints, [](const auto& e) { return e.lastKnownSceneTime; });
-
-            auto finalValue = estimateAverageSceneTimeStatic(localSceneTime, otherTimes, time);
-            result.set_value(finalValue);
-        });
-
-        return SceneTime(result.get_future().get());
+        std::scoped_lock<std::mutex> lock(mutex);
+        auto time = getTimestamp();
+        auto otherTimes = choose(endpoints, [](const auto& e) { return e.lastKnownSceneTime; });
+        auto finalValue = estimateAverageSceneTimeStatic(localSceneTime, otherTimes, time);
+        return SceneTime(finalValue);
     }
 
     float GameNetworkService::getMaxAverageRttMillis()
     {
-        std::promise<float> result;
-        asio::post(ioContext,[this, &result]() {
-            auto maxRtt = 0.0f;
-            for (const auto& e : endpoints)
+        std::scoped_lock<std::mutex> lock(mutex);
+        auto maxRtt = 0.0f;
+        for (const auto& e : endpoints)
+        {
+            if (e.averageRoundTripTime > maxRtt)
             {
-                if (e.averageRoundTripTime > maxRtt)
-                {
-                    maxRtt = e.averageRoundTripTime;
-                }
+                maxRtt = e.averageRoundTripTime;
             }
-
-            result.set_value(maxRtt);
-        });
-
-        return result.get_future().get();
+        }
+        return maxRtt;
     }
 
     void GameNetworkService::run()
     {
         try
         {
-            auto endpoint = asio::ip::udp::endpoint(asio::ip::udp::v6(), port);
-            socket.open(endpoint.protocol());
-            socket.bind(endpoint);
+            pollGroup = sockets->CreatePollGroup();
+            if (pollGroup == k_HSteamNetPollGroup_Invalid)
+            {
+                throw std::runtime_error("Failed to create GNS poll group for game");
+            }
 
-            listenForNextMessage();
+            for (auto& e : endpoints)
+            {
+                sockets->SetConnectionPollGroup(e.connection, pollGroup);
+            }
 
-            sendLoop();
+            running = true;
+            auto lastSendTime = std::chrono::steady_clock::now();
 
-            ioContext.run();
+            while (running)
+            {
+                sockets->RunCallbacks();
+                pollMessages();
+
+                auto now = std::chrono::steady_clock::now();
+                if (now - lastSendTime >= std::chrono::milliseconds(100))
+                {
+                    sendToAll();
+                    lastSendTime = now;
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         }
         catch (const std::exception& e)
         {
-            LOG_ERROR << "Network thread died with error: " << e.what();
+            LOG_ERROR << "Game network thread died with error: " << e.what();
         }
     }
 
-    void GameNetworkService::listenForNextMessage()
+    void GameNetworkService::pollMessages()
     {
-        socket.async_receive_from(
-            asio::buffer(receiveBuffer.data(), receiveBuffer.size()),
-            currentRemoteEndpoint,
-            [this](const auto& error, const auto& bytesTransferred) {
-                receive(error, bytesTransferred);
-                listenForNextMessage();
-            });
-    }
+        SteamNetworkingMessage_t* messages[64];
+        int numMessages = sockets->ReceiveMessagesOnPollGroup(pollGroup, messages, 64);
 
-    proto::NetworkMessage createProtoMessage(
-        int packetId,
-        PlayerId playerId,
-        SceneTime currentSceneTime,
-        SequenceNumber nextCommandToSend,
-        SequenceNumber nextCommandToReceive,
-        GameTime nextHashToSend,
-        GameTime nextHashToReceive,
-        std::chrono::milliseconds ackDelay,
-        const std::deque<GameNetworkService::CommandSet>& sendBuffer,
-        const std::deque<GameHash>& gameHashBuffer)
-    {
-        proto::NetworkMessage outerMessage;
-        auto& m = *outerMessage.mutable_game_update();
-        m.set_packet_id(packetId);
-        m.set_player_id(playerId.value);
-        m.set_current_scene_time(currentSceneTime.value);
-        m.set_next_command_set_to_send(nextCommandToSend.value);
-        m.set_next_command_set_to_receive(nextCommandToReceive.value);
-        m.set_next_game_hash_to_send(nextHashToSend.value);
-        m.set_next_game_hash_to_receive(nextHashToReceive.value);
-        m.set_ack_delay(ackDelay.count());
+        std::scoped_lock<std::mutex> lock(mutex);
 
-        for (const auto& set : sendBuffer)
+        for (int i = 0; i < numMessages; ++i)
         {
-            auto& setMessage = *m.add_command_set();
+            auto* msg = messages[i];
 
-            for (const auto& cmd : set)
+            auto endpointIt = std::find_if(endpoints.begin(), endpoints.end(),
+                [&](const auto& e) { return e.connection == msg->m_conn; });
+            if (endpointIt == endpoints.end())
             {
-                auto& cmdMessage = *setMessage.add_command();
-                serializePlayerCommand(cmd, cmdMessage);
-            }
-        }
-
-        for (const auto& hash : gameHashBuffer)
-        {
-            m.add_game_hashes(hash.value);
-        }
-
-        return outerMessage;
-    }
-
-    void GameNetworkService::sendLoop()
-    {
-        sendToAll();
-        sendTimer.expires_after(std::chrono::milliseconds(100));
-        sendTimer.async_wait([this](const asio::error_code& error) {
-            if (error)
-            {
-                LOG_ERROR << "Error while waiting on timer: " << error.message();
-                return;
+                LOG_DEBUG << "Received message from unknown GNS connection";
+                msg->Release();
+                continue;
             }
 
-            sendLoop();
-        });
-    }
-
-    void GameNetworkService::sendToAll()
-    {
-        for (auto& e : endpoints)
-        {
-            send(e);
+            processMessage(*endpointIt, msg->m_pData, msg->m_cbSize);
+            msg->Release();
         }
     }
 
-    void GameNetworkService::send(GameNetworkService::EndpointInfo& endpoint)
+    void GameNetworkService::processMessage(EndpointInfo& endpoint, const void* data, int size)
     {
-        auto packetId = uniform_dist(gen);
-        LOG_DEBUG << "Sending packet ID " << packetId << " to endpoint: " << endpoint.endpoint.address().to_string() << ":" << endpoint.endpoint.port();
-        std::chrono::milliseconds delay(0);
-        auto sendTime = getTimestamp();
-        if (endpoint.lastReceiveTime)
-        {
-            delay = std::chrono::duration_cast<std::chrono::milliseconds>(sendTime - *endpoint.lastReceiveTime);
-        }
-
-        auto message = createProtoMessage(packetId, localPlayerId, currentSceneTime, endpoint.nextCommandToSend, endpoint.nextCommandToReceive, endpoint.nextHashToSend, endpoint.nextHashToReceive, delay, endpoint.sendBuffer, endpoint.hashSendBuffer);
-        auto messageSize = message.ByteSizeLong();
-        if (messageSize > getSize(sendBuffer) - 4)
-        {
-            throw std::runtime_error("Message to be sent was bigger than buffer size");
-        }
-        if (!message.SerializeToArray(sendBuffer.data(), sendBuffer.size()))
-        {
-            throw std::runtime_error("Failed to serialize message to buffer");
-        }
-
-        // throw in a CRC to verify the message
-        writeInt(&sendBuffer[messageSize], computeCrc(sendBuffer.data(), messageSize));
-
-        socket.send_to(asio::buffer(sendBuffer.data(), messageSize + 4), endpoint.endpoint);
-        endpoint.packetsSent++;
-
-        auto nextSequenceNumber = SequenceNumber(endpoint.nextCommandToSend.value + (endpoint.sendBuffer.size()));
-        if (endpoint.sendTimes.empty() || endpoint.sendTimes.back().first < nextSequenceNumber)
-        {
-            endpoint.sendTimes.emplace_back(nextSequenceNumber, sendTime);
-        }
-    }
-
-    void GameNetworkService::receive(const asio::error_code& error, std::size_t receivedBytes)
-    {
-        if (error)
-        {
-            LOG_ERROR << "Error on receive: " << error.message();
-            return;
-        }
-
-        auto receiveTime = getTimestamp();
-        LOG_DEBUG << "Received " << receivedBytes << " bytes from endpoint: " << currentRemoteEndpoint.address().to_string() << ":" << currentRemoteEndpoint.port();
-
-        if (receivedBytes == receiveBuffer.size())
-        {
-            LOG_WARN << "Received " << receivedBytes << " bytes, which filled the entire message buffer!!";
-        }
-
-        if (receivedBytes < 4)
-        {
-            LOG_ERROR << "Received message is too short (" << receivedBytes << " bytes), ignoring";
-            return;
-        }
-
-        auto endpointIt = std::find_if(endpoints.begin(), endpoints.end(), [this](const auto& e) { return currentRemoteEndpoint == e.endpoint; });
-        if (endpointIt == endpoints.end())
-        {
-            // message was from some unknown address, ignore it
-            LOG_DEBUG << "Unknown address, ignoring";
-            return;
-        }
-
-        auto receivedCrc = readInt(&receiveBuffer[receivedBytes - 4]);
-        auto computedCrc = computeCrc(receiveBuffer.data(), receivedBytes - 4);
-        if (receivedCrc != computedCrc)
-        {
-            LOG_ERROR << "Message CRC incorrect, ignoring";
-            return;
-        }
+        // mutex already held by caller
 
         proto::NetworkMessage outerMessage;
-        outerMessage.ParseFromArray(receiveBuffer.data(), receivedBytes - 4);
+        if (!outerMessage.ParseFromArray(data, size))
+        {
+            LOG_ERROR << "Failed to parse game network message";
+            return;
+        }
+
         if (!outerMessage.has_game_update())
         {
-            // message wasn't a game update, ignore it
-            LOG_DEBUG << "Not game update, ignoring";
+            LOG_DEBUG << "Received non-game-update message, ignoring";
             return;
         }
 
-        EndpointInfo& endpoint = *endpointIt;
         endpoint.packetsReceived++;
 
-        // Log periodic network health summary every 300 packets (~10 seconds at 30 tick/s)
         if (endpoint.packetsReceived % 300 == 0)
         {
             LOG_INFO << "Network health [player " << endpoint.playerId.value << "]: sent=" << endpoint.packetsSent
@@ -285,94 +197,101 @@ namespace rwe
 
         const auto& message = outerMessage.game_update();
 
-        LOG_DEBUG << "Packet received with ID " << message.packet_id();
         if (message.player_id() != endpoint.playerId.value)
         {
             LOG_ERROR << "Player " << endpoint.playerId.value << " endpoint sent wrong player ID: " << message.player_id();
             return;
         }
 
-        LOG_DEBUG << "Received ack to " << message.next_command_set_to_receive() << " and " << message.command_set_size() << " commands starting at " << message.next_command_set_to_send();
-
-        SequenceNumber newNextCommandToSend(message.next_command_set_to_receive());
-        if (newNextCommandToSend.value > endpoint.nextCommandToSend.value + endpoint.sendBuffer.size())
-        {
-            LOG_ERROR << "Remote acked up to " << newNextCommandToSend.value << ", but we are at " << endpoint.nextCommandToSend.value << " and command buffer contains " << endpoint.sendBuffer.size() << " elements";
-        }
-        while (newNextCommandToSend > endpoint.nextCommandToSend && !endpoint.sendBuffer.empty())
-        {
-            endpoint.sendBuffer.pop_front();
-            endpoint.nextCommandToSend = SequenceNumber(endpoint.nextCommandToSend.value + 1);
-        }
-
-        while (!endpoint.sendTimes.empty() && endpoint.nextCommandToSend > endpoint.sendTimes.front().first)
-        {
-            // skip older send time measurements
-            endpoint.sendTimes.pop_front();
-        }
-        if (!endpoint.sendTimes.empty() && endpoint.nextCommandToSend == endpoint.sendTimes.front().first)
-        {
-            auto roundTripTime = receiveTime - endpoint.sendTimes.front().second;
-            auto ackDelay = std::chrono::milliseconds(message.ack_delay());
-            roundTripTime = roundTripTime > ackDelay ? roundTripTime - ackDelay : std::chrono::milliseconds(0);
-            auto rttMillis = std::chrono::duration_cast<std::chrono::milliseconds>(roundTripTime).count();
-            endpoint.averageRoundTripTime = ema(rttMillis, endpoint.averageRoundTripTime, 0.1f);
-            LOG_DEBUG << "Average RTT: " << endpoint.averageRoundTripTime << "ms";
-        }
-
+        // Update peer scene time estimate using RTT from GNS
+        updateRtt(endpoint);
         auto extraFrames = static_cast<unsigned int>((endpoint.averageRoundTripTime / 2.0f) * SimTicksPerSecond / 1000.0f);
+        auto receiveTime = getTimestamp();
         endpoint.lastKnownSceneTime = std::make_pair(SceneTime(message.current_scene_time() + extraFrames), receiveTime);
-        LOG_DEBUG << "Estimated peer scene time: " << endpoint.lastKnownSceneTime->first.value;
 
-        SequenceNumber firstCommandNumber(message.next_command_set_to_send());
-        if (firstCommandNumber > endpoint.nextCommandToReceive)
+        // With GNS reliable delivery, all commands arrive in order.
+        // Process all command sets in the message.
+        for (int i = 0; i < message.command_set_size(); ++i)
         {
-            // message starts with commands too far in the future, ignore it.
-            // FIXME: this should probably be an error as it shouldn't ever happen
-            LOG_ERROR << "First command number in message was too high! Expecting no more than " << endpoint.nextCommandToReceive.value << ", received " << firstCommandNumber.value;
-            return;
+            auto commandSet = deserializeCommandSet(message.command_set(i));
+            playerCommandService->pushCommands(endpoint.playerId, commandSet);
         }
 
-        auto firstRelevantCommandIndex = (endpoint.nextCommandToReceive - firstCommandNumber).value;
-
-        // if the packet is relevant (contains new information), process it
-        if (firstRelevantCommandIndex < static_cast<unsigned int>(message.command_set_size()))
+        // Process game hashes
+        for (int i = 0; i < message.game_hashes_size(); ++i)
         {
-            endpoint.lastReceiveTime = receiveTime;
+            playerCommandService->pushHash(endpoint.playerId, GameHash(message.game_hashes(i)));
+        }
+    }
 
-            for (int i = firstRelevantCommandIndex; i < message.command_set_size(); ++i)
+    void GameNetworkService::updateRtt(EndpointInfo& endpoint)
+    {
+        SteamNetConnectionRealTimeStatus_t status;
+        if (sockets->GetConnectionRealTimeStatus(endpoint.connection, &status, 0, nullptr) == k_EResultOK)
+        {
+            if (status.m_nPing >= 0)
             {
-                auto commandSet = deserializeCommandSet(message.command_set(i));
-                playerCommandService->pushCommands(endpoint.playerId, commandSet);
-                endpoint.nextCommandToReceive = SequenceNumber(endpoint.nextCommandToReceive.value + 1);
+                endpoint.averageRoundTripTime = static_cast<float>(status.m_nPing);
+            }
+        }
+    }
+
+    void GameNetworkService::sendToAll()
+    {
+        std::scoped_lock<std::mutex> lock(mutex);
+        for (auto& e : endpoints)
+        {
+            send(e);
+        }
+        // Clear pending data after sending to all endpoints
+        pendingCommands.clear();
+        pendingHashes.clear();
+    }
+
+    void GameNetworkService::send(GameNetworkService::EndpointInfo& endpoint)
+    {
+        // mutex already held by caller
+
+        proto::NetworkMessage outerMessage;
+        auto& m = *outerMessage.mutable_game_update();
+        m.set_player_id(localPlayerId.value);
+        m.set_current_scene_time(currentSceneTime.value);
+
+        // Legacy fields — kept for protocol compatibility, not used by GNS transport
+        m.set_packet_id(0);
+        m.set_next_command_set_to_send(0);
+        m.set_next_command_set_to_receive(0);
+        m.set_next_game_hash_to_send(0);
+        m.set_next_game_hash_to_receive(0);
+        m.set_ack_delay(0);
+
+        // Send any pending commands
+        for (const auto& set : pendingCommands)
+        {
+            auto& setMessage = *m.add_command_set();
+            for (const auto& cmd : set)
+            {
+                auto& cmdMessage = *setMessage.add_command();
+                serializePlayerCommand(cmd, cmdMessage);
             }
         }
 
-        GameTime newNextHashToSend(message.next_game_hash_to_receive());
-        if (newNextHashToSend > endpoint.nextHashToSend + GameTime(endpoint.hashSendBuffer.size()))
+        // Send any pending hashes
+        for (const auto& hash : pendingHashes)
         {
-            LOG_ERROR << "Remote acked up to " << newNextHashToSend.value << ", but we are at " << endpoint.nextHashToSend.value << " and hash buffer contains " << endpoint.hashSendBuffer.size() << " elements";
-        }
-        while (newNextHashToSend > endpoint.nextHashToSend && !endpoint.hashSendBuffer.empty())
-        {
-            endpoint.hashSendBuffer.pop_front();
-            endpoint.nextHashToSend += GameTime(1);
+            m.add_game_hashes(hash.value);
         }
 
-        GameTime firstGameHashTime(message.next_game_hash_to_send());
-        if (firstGameHashTime > endpoint.nextHashToReceive)
+        auto messageSize = outerMessage.ByteSizeLong();
+        std::vector<char> buffer(messageSize);
+        if (!outerMessage.SerializeToArray(buffer.data(), buffer.size()))
         {
-            // message starts with hashes too far in the future, ignore it.
-            // FIXME: this should probably be an error as it shouldn't ever happen
-            LOG_ERROR << "First game hash time in message was too high! Expecting no more than " << endpoint.nextHashToReceive.value << ", received " << firstGameHashTime.value;
+            LOG_ERROR << "Failed to serialize game update message";
             return;
         }
 
-        auto firstRelevantGameHashIndex = (endpoint.nextHashToReceive - firstGameHashTime).value;
-        for (int i = firstRelevantGameHashIndex; i < message.game_hashes_size(); ++i)
-        {
-            playerCommandService->pushHash(endpoint.playerId, GameHash(message.game_hashes(i)));
-            endpoint.nextHashToReceive += GameTime(1);
-        }
+        sockets->SendMessageToConnection(endpoint.connection, buffer.data(), buffer.size(),
+            k_nSteamNetworkingSend_ReliableNoNagle, nullptr);
+        endpoint.packetsSent++;
     }
 }

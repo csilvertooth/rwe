@@ -116,6 +116,7 @@ namespace rwe
         }
 
         // set up network
+        bool hasNetworkPeers = false;
         for (Index i = 0; i < getSize(gameParameters.players); ++i)
         {
             const auto& p = gameParameters.players[i];
@@ -131,15 +132,28 @@ namespace rwe
                 continue;
             }
 
-            networkService.addEndpoint(i, address->first, address->second);
+            if (!gnsContext)
+            {
+                gnsContext = std::make_shared<GnsContext>();
+                networkService = std::make_unique<LoadingNetworkService>(gnsContext->sockets());
+            }
+
+            networkService->addEndpoint(i, address->first, address->second);
+            hasNetworkPeers = true;
         }
-        networkService.start(gameParameters.localNetworkPort);
+        if (hasNetworkPeers)
+        {
+            networkService->start(gameParameters.localNetworkPort);
+        }
 
         sceneContext.sceneManager->setNextScene(std::shared_ptr<Scene>(createGameScene(gameParameters.mapName, gameParameters.schemaIndex)));
 
         // wait for other players before starting
-        networkService.setDoneLoading();
-        networkService.waitForAllToBeReady();
+        if (hasNetworkPeers)
+        {
+            networkService->setDoneLoading();
+            networkService->waitForAllToBeReady();
+        }
     }
 
     void LoadingScene::render()
@@ -226,7 +240,7 @@ namespace rwe
 
                 if (auto networkInfo = std::get_if<PlayerControllerTypeNetwork>(&params->controller); networkInfo != nullptr)
                 {
-                    endpointInfos.emplace_back(playerId, networkService.getEndpoint(i));
+                    endpointInfos.emplace_back(playerId, networkService->getConnection(i));
                 }
             }
         }
@@ -238,7 +252,12 @@ namespace rwe
         simulation.initFogOfWar();
         simulation.initRadarMap();
 
-        auto gameNetworkService = std::make_unique<GameNetworkService>(*localPlayerId, std::stoi(gameParameters.localNetworkPort), endpointInfos, playerCommandService.get());
+        if (networkService)
+        {
+            networkService->releaseConnections();
+        }
+
+        auto gameNetworkService = std::make_unique<GameNetworkService>(*localPlayerId, gnsContext, endpointInfos, playerCommandService.get());
 
         auto minimapDots = sceneContext.textureService->getGafEntry("anims/FX.GAF", "radlogo");
         if (minimapDots->sprites.size() != 10)

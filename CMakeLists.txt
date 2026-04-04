@@ -147,10 +147,12 @@ else()
         set(Protobuf_LIBRARY "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/lib/libprotobuf.a")
         set(Protobuf_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/include")
         if(WIN32)
-            set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/bin/protoc.exe")
+            set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/bin/protoc.exe" CACHE FILEPATH "Protoc compiler" FORCE)
         else()
-            set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/bin/protoc")
+            set(Protobuf_PROTOC_EXECUTABLE "${CMAKE_SOURCE_DIR}/libs/_protobuf-install/bin/protoc" CACHE FILEPATH "Protoc compiler" FORCE)
         endif()
+        # Prevent find_package(Protobuf) from overriding with system protoc
+        set(Protobuf_ROOT "${CMAKE_SOURCE_DIR}/libs/_protobuf-install")
     else()
         find_package(Protobuf REQUIRED)
         set(Protobuf_LIBRARY protobuf::libprotobuf)
@@ -171,6 +173,12 @@ endif()
 
 set(Protobuf_USE_STATIC_LIBS ON)
 find_package(Protobuf REQUIRED)
+
+# Override the protobuf::protoc imported target if we have a local protoc,
+# so protobuf_generate_cpp uses the matching version instead of system protoc.
+if(TARGET protobuf::protoc AND DEFINED Protobuf_PROTOC_EXECUTABLE)
+    set_target_properties(protobuf::protoc PROPERTIES IMPORTED_LOCATION "${Protobuf_PROTOC_EXECUTABLE}")
+endif()
 
 protobuf_generate_cpp(PROTO_SOURCE_FILES PROTO_HEADER_FILES proto/network.proto)
 message("proto src files: ${PROTO_SOURCE_FILES}")
@@ -503,6 +511,8 @@ set(GAME_FILES
     src/rwe/CroppedViewport.h
     src/rwe/CursorService.cpp
     src/rwe/CursorService.h
+    src/rwe/GnsContext.cpp
+    src/rwe/GnsContext.h
     src/rwe/ImGuiContext.cpp
     src/rwe/ImGuiContext.h
     src/rwe/LoadingNetworkService.cpp
@@ -643,14 +653,23 @@ target_include_directories(librwe PUBLIC "src")
 configure_file("src/rwe/config.h.in" "config/rwe/config.h" @ONLY)
 target_include_directories(librwe PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/config")
 
-target_include_directories(librwe PUBLIC "libs/asio/asio/include")
-target_compile_definitions(librwe PUBLIC ASIO_STANDALONE)
-if(WIN32)
-    # winsock needed for asio on windows
-    target_link_libraries(librwe ws2_32)
-endif()
-
 target_include_directories(librwe PUBLIC "libs/utfcpp/source")
+
+# GameNetworkingSockets (Valve open-source networking)
+target_include_directories(librwe PUBLIC "libs/GameNetworkingSockets/include")
+target_link_libraries(librwe ${PROJECT_SOURCE_DIR}/libs/GameNetworkingSockets/build/src/libGameNetworkingSockets_s.a)
+if(APPLE)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(librwe OpenSSL::SSL OpenSSL::Crypto)
+elseif(UNIX)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(librwe OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(librwe pthread)
+elseif(WIN32)
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(librwe OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(librwe ws2_32 crypt32)
+endif()
 
 target_precompile_headers(librwe PRIVATE
     <algorithm>
@@ -713,7 +732,9 @@ else()
     message(STATUS "Using Protobuf_LIBRARIES: ${Protobuf_LIBRARIES}")
     target_link_libraries(librwe ${Protobuf_LIBRARIES})
 endif()
-target_include_directories(librwe PUBLIC ${Protobuf_INCLUDE_DIRS})
+# Use BEFORE to ensure local protobuf headers take precedence over system ones
+# (Homebrew protobuf v34 headers in /opt/homebrew/include conflict with v3.21)
+target_include_directories(librwe BEFORE PUBLIC ${Protobuf_INCLUDE_DIRS})
 target_include_directories(librwe PUBLIC ${CMAKE_CURRENT_BINARY_DIR}) # for generated headers
 
 target_link_libraries(librwe nlohmann_json::nlohmann_json)

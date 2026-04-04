@@ -2,6 +2,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <execinfo.h>
+#include <unistd.h>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -122,7 +123,7 @@ namespace rwe
         return Ok(std::move(glContext));
     };
 
-    int run(const std::vector<fs::path>& searchPath, const PathMapping& pathMapping, const std::optional<GameParameters>& gameParameters, unsigned int desiredWindowWidth, unsigned int desiredWindowHeight, bool fullscreen, const std::string& imGuiIniPath, GlobalConfig& globalConfig)
+    int run(const std::vector<fs::path>& searchPath, const PathMapping& pathMapping, const std::optional<GameParameters>& gameParameters, unsigned int desiredWindowWidth, unsigned int desiredWindowHeight, bool fullscreen, int displayIndex, const std::string& imGuiIniPath, GlobalConfig& globalConfig)
     {
         LOG_INFO << ProjectNameVersion;
         LOG_INFO << "Current directory: " << fs::current_path().string();
@@ -148,6 +149,24 @@ namespace rwe
         if (window == nullptr)
         {
             throw std::runtime_error(SDL_GetError());
+        }
+
+        // Position window on requested display
+        if (displayIndex >= 0)
+        {
+            int count = 0;
+            auto* displays = SDL_GetDisplays(&count);
+            if (displays && displayIndex < count)
+            {
+                SDL_Rect bounds;
+                if (SDL_GetDisplayBounds(displays[displayIndex], &bounds))
+                {
+                    SDL_SetWindowPosition(window.get(), bounds.x + 50, bounds.y + 50);
+                    LOG_INFO << "Placed window on display " << displayIndex
+                        << " at (" << bounds.x + 50 << ", " << bounds.y + 50 << ")";
+                }
+                SDL_free(displays);
+            }
         }
 
         // Prevent the mouse from leaving the window.
@@ -602,6 +621,7 @@ int main(int argc, char* argv[])
                       << "  --data-path <path>    Game data search path (repeatable)\n"
                       << "  --map <name>          Launch directly into a game on this map\n"
                       << "  --port <port>         Network port (default: 1337)\n"
+                      << "  --display <index>     Display index to place window on (0, 1, 2...)\n"
                       << "  --player <spec>       Player spec: name;type;side;color (repeatable)\n"
                       << "  --dir-<name> <dir>    Override directory name for a data category\n"
                       << std::endl;
@@ -679,7 +699,9 @@ int main(int argc, char* argv[])
             pathMapping.units = args.getString("dir-units", "units");
             pathMapping.weapons = args.getString("dir-weapons", "weapons");
 
-            return rwe::run(gameDataPaths, pathMapping, gameParameters, screenWidth, screenHeight, fullscreen, imGuiIniFilePath.string(), config);
+            auto displayIdx = args.contains("display") ? static_cast<int>(args.getUint("display", 0)) : -1;
+
+            return rwe::run(gameDataPaths, pathMapping, gameParameters, screenWidth, screenHeight, fullscreen, displayIdx, imGuiIniFilePath.string(), config);
         }
         catch (const std::exception& e)
         {

@@ -3,6 +3,7 @@
 #include <memory>
 #include <rwe/AudioService.h>
 #include <rwe/CursorService.h>
+#include <rwe/GnsContext.h>
 #include <rwe/LoadingNetworkService.h>
 #include <rwe/SceneContext.h>
 #include <rwe/TextureService.h>
@@ -80,7 +81,8 @@ namespace rwe
 
         std::vector<UiLightBar*> bars;
 
-        LoadingNetworkService networkService;
+        std::shared_ptr<GnsContext> gnsContext;
+        std::unique_ptr<LoadingNetworkService> networkService;
 
         UiFactory uiFactory;
 

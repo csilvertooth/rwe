@@ -1,47 +1,34 @@
 #pragma once
 
-#include <asio.hpp>
+#include <atomic>
 #include <chrono>
 #include <deque>
-#include <future>
+#include <memory>
+#include <mutex>
 #include <network.pb.h>
-#include <random>
+#include <rwe/GnsContext.h>
 #include <rwe/game/PlayerCommand.h>
 #include <rwe/game/PlayerCommandService.h>
 #include <rwe/rwe_time.h>
 #include <rwe/sim/GameHash.h>
 #include <rwe/sim/GameTime.h>
 #include <rwe/sim/PlayerId.h>
-#include <rwe/util/OpaqueId.h>
-#include <rwe/util/OpaqueUnit.h>
+#include <steam/isteamnetworkingsockets.h>
+#include <steam/steamnetworkingtypes.h>
+#include <thread>
+#include <vector>
 
 namespace rwe
 {
-    struct SequenceNumberTag;
-    using SequenceNumber = OpaqueUnit<unsigned int, SequenceNumberTag>;
-
     class GameNetworkService
     {
     public:
         using CommandSet = std::vector<PlayerCommand>;
+
         struct EndpointInfo
         {
             PlayerId playerId;
-            asio::ip::udp::endpoint endpoint;
-
-            SequenceNumber nextCommandToSend{0};
-            SequenceNumber nextCommandToReceive{0};
-
-            GameTime nextHashToSend{0};
-            GameTime nextHashToReceive{0};
-
-            /**
-             * The time at which the last relevant update packet
-             * was received from the remote peer.
-             * An update packet is relevant
-             * if it contains new commands that we haven't seen before.
-             */
-            std::optional<Timestamp> lastReceiveTime;
+            HSteamNetConnection connection;
 
             /**
              * The last reported scene time from this peer,
@@ -49,72 +36,50 @@ namespace rwe
              */
             std::optional<std::pair<SceneTime, Timestamp>> lastKnownSceneTime;
 
-            std::deque<CommandSet> sendBuffer;
-
-            std::deque<GameHash> hashSendBuffer;
-
             /**
-             * Records the time at which we first sent a packet
-             * finishing at the given sequence number.
-             * This is used for measuring RTT when we receive acks.
-             */
-            std::deque<std::pair<SequenceNumber, Timestamp>> sendTimes;
-
-            /**
-             * Exponential moving average of round trip time
-             * for communication between us and the remote peer.
+             * Round trip time in milliseconds, from GNS connection stats.
              */
             float averageRoundTripTime{0};
 
             unsigned int packetsSent{0};
             unsigned int packetsReceived{0};
 
-            EndpointInfo(const PlayerId& playerId, const asio::ip::udp::endpoint& endpoint)
-                : playerId(playerId), endpoint(endpoint)
+            EndpointInfo(const PlayerId& playerId, HSteamNetConnection connection)
+                : playerId(playerId), connection(connection)
             {
             }
         };
 
     private:
-        std::random_device rd;
-        std::default_random_engine gen{rd()};
-        std::uniform_int_distribution<int> uniform_dist{};
         PlayerId localPlayerId;
-        int port;
 
         std::thread networkThread;
+        std::atomic<bool> running{false};
 
-        asio::io_context ioContext;
-        asio::ip::udp::resolver resolver;
-        asio::ip::udp::socket socket;
-        asio::steady_timer sendTimer;
+        std::shared_ptr<GnsContext> gnsContext;
+        ISteamNetworkingSockets* sockets;
+        HSteamNetPollGroup pollGroup{k_HSteamNetPollGroup_Invalid};
 
+        // Shared state protected by mutex
+        mutable std::mutex mutex;
         std::vector<EndpointInfo> endpoints;
-
-        std::array<char, 1500> sendBuffer;
-        std::array<char, 1500> receiveBuffer;
-        asio::ip::udp::endpoint currentRemoteEndpoint;
+        SceneTime currentSceneTime{0};
+        std::deque<CommandSet> pendingCommands;
+        std::deque<GameHash> pendingHashes;
 
         PlayerCommandService* const playerCommandService;
 
-        SceneTime currentSceneTime{0};
-
     public:
-        GameNetworkService(PlayerId localPlayerId, int port, const std::vector<EndpointInfo>& endpoints, PlayerCommandService* playerCommandService);
+        GameNetworkService(
+            PlayerId localPlayerId,
+            std::shared_ptr<GnsContext> gnsContext,
+            const std::vector<EndpointInfo>& endpoints,
+            PlayerCommandService* playerCommandService);
 
         virtual ~GameNetworkService();
 
         void start();
 
-        /**
-         * Submit new information to be sent on the network.
-         * @param currentSceneTime The scene time we are currently simulating.
-         *                         This is used to inform peers/synchronise simulation speed.
-         * @param commands The latest set of player commands.
-         *                 These are not related to the current scene time.
-         *                 They will be queued up to be sent over the network
-         *                 after all the previously submitted commands.
-         */
         void submitCommands(SceneTime currentSceneTime, const CommandSet& commands);
 
         void submitGameHash(GameHash hash);
@@ -126,14 +91,14 @@ namespace rwe
     private:
         void run();
 
-        void listenForNextMessage();
-
-        void sendLoop();
+        void pollMessages();
 
         void sendToAll();
 
         void send(EndpointInfo& endpoint);
 
-        void receive(const asio::error_code& error, std::size_t receivedBytes);
+        void processMessage(EndpointInfo& endpoint, const void* data, int size);
+
+        void updateRtt(EndpointInfo& endpoint);
     };
 }

@@ -23,10 +23,4 @@ namespace rwe
         }
         return accum / count;
     }
-
-    void writeInt(char* sendBuffer, unsigned int crcResult);
-
-    unsigned int readInt(const char* buffer);
-
-    unsigned int computeCrc(const char* buffer, unsigned int size);
 }
