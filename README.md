@@ -23,34 +23,48 @@ with Total Annihilation data files. This fork focuses on:
 - SDL3 migration (vendored submodule, static linked)
 - GitHub Actions CI for Linux (gcc-14, clang-18), macOS ARM, Windows (MSVC, MinGW64)
 
-### Phase 2 -- Core Engine [IN PROGRESS]
+### Phase 2 -- Core Engine [COMPLETE]
 | Feature | Status |
 |---------|--------|
 | EXPLODE opcode (unit deaths) | Done |
 | COB GET/SET completeness (30+ values) | Done |
 | Fog of war + line-of-sight | Done |
-| Radar / sonar / jamming | Not started |
+| Radar / sonar / jamming | Done |
 | Category-based weapon targeting | Done |
 | Guided projectile physics (missiles, bombs) | Done |
 | Beam weapons (BeamWeapon, Duration) | Done |
-| Reclaim / D-Gun / capture | Not started |
+| Reclaim / D-Gun / capture | Done |
 | Veterancy system (XP, stat bonuses) | Done |
 | Paralyzer/EMP system | Done |
 | Self-destruct / kamikaze | Done |
 
-### Phase 3 -- 3.9.02 Patch Parity
+### Phase 2.5 -- Polish & Stability [COMPLETE]
+| Feature | Status |
+|---------|--------|
+| Crash protection (cascade death, dead unit access) | Done |
+| In-game options menu (F2, pause, settings) | Done |
+| Modern ImGui UI theme | Done |
+| TA:Escalation key bindings | Done |
+| Nanolathe particle VFX (race-based colors) | Done |
+| Build queue visuals (numbered, pulsing lines) | Done |
+| Air unit flight model (banking, altitude, obstacles) | Done |
+| Health bar batching (performance) | Done |
+| Reclaim via right-click | Done |
+| D-Gun manual fire (D key) | Done |
+
+### Phase 3 -- 3.9.02 Patch Parity [NEXT]
 Interceptor/shields, transports, naval, teleporters, stockpile weapons,
 cloaking, DamageModifier/ArmorType, area commands, MegaMap strategic overlay.
 
 ### Phase 4 -- Modernization
-GameNetworkingSockets networking, NAT traversal, basic AI, pathfinding
-improvements, high-DPI support, expanded player slots.
+SDL3 GPU API rendering, GameNetworkingSockets networking, NAT traversal,
+basic AI, pathfinding improvements, high-DPI support, expanded player slots.
 
 ## Acknowledgments
 
 This project would not be possible without the work of:
 
-- **Michael Heasell (MHeasell)** -- Creator of Robot War Engine, the foundation of
+- **Michael Heasell (MHeasell)** -- Creator of Robot War Engine, the foundation
   this project is built upon. Licensed under GPLv3.
   https://github.com/MHeasell/rwe
 - **Cavedog Entertainment** -- Original creators of Total Annihilation (1997).
@@ -115,15 +129,43 @@ Or manually:
 
     scripts/build-windows.sh Release
 
-## How to Play
+## Controls
 
-- Arrow keys to scroll the map
-- Left click to select units
-- Right click to move/attack
-- A then click to attack-move
-- S to stop
-- F10 for in-game debug menu (spawn units, toggle fog of war)
-- F11 for global debug menu
+### Unit Commands (TA:Escalation standard)
+| Key | Action |
+|-----|--------|
+| A | Attack |
+| D | D-Gun (commander) |
+| E | Reclaim |
+| G | Guard |
+| M | Move |
+| P | Patrol |
+| R | Repair |
+| S | Stop |
+| Ctrl+D | Self-destruct |
+| Ctrl+C | Select commander |
+| ~ | Toggle health bars |
+
+### Game Controls
+| Key | Action |
+|-----|--------|
+| F2 | Options menu |
+| F10 | Debug menu |
+| F11 | Global debug |
+| Escape | Deselect / cancel |
+| Pause | Pause game |
+| +/- | Game speed |
+| Enter | Cheat console |
+| Shift | Queue orders |
+| Arrow keys | Scroll map |
+
+### Cheat Console (press Enter)
+| Command | Action |
+|---------|--------|
+| +atm | 10000 metal and energy |
+| +army | Spawn army at cursor |
+| +kill | Kill selected units |
+| +UNITNAME | Spawn unit at cursor |
 
 ## License
 
