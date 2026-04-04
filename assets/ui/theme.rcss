@@ -1,8 +1,8 @@
 /* Annihilation Engine UI Theme */
 
 body {
-    font-family: Orbitron;
-    font-size: 16dp;
+    font-family: Orbitron, sans-serif;
+    font-size: 16px;
     color: #e0e4f0;
 }
 

@@ -164,8 +164,14 @@ namespace rwe
     bool RmlUiContext::processEvent(SDL_Event& event)
     {
         if (!context) return false;
-        // Only consume events when documents are loaded and visible
         if (context->GetNumDocuments() == 0) return false;
+
+        // Never consume Escape — let the scene handle it for closing menus
+        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
+        {
+            return false;
+        }
+
         return RmlSDL::InputEventHandler(context, window, event);
     }
 
