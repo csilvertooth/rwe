@@ -52,18 +52,24 @@ namespace rwe
         io->IniFilename = this->iniPath.data();
         io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-        // Load font with oversampling for crisp rendering
-        ImFontConfig fontConfig;
-        fontConfig.OversampleH = 3;
-        fontConfig.OversampleV = 3;
-        fontConfig.SizePixels = 16.0f; // base size, scales well
-        io->Fonts->AddFontDefault(&fontConfig);
-
         // Scale font based on window DPI/size for readability
         int winW = 0, winH = 0;
         SDL_GetWindowSize(window, &winW, &winH);
         float dpiScale = std::max(1.0f, static_cast<float>(winH) / 768.0f);
-        io->FontGlobalScale = dpiScale;
+        float fontSize = 16.0f * dpiScale;
+
+        // Load Orbitron font for modern sci-fi look
+        ImFontConfig fontConfig;
+        fontConfig.OversampleH = 3;
+        fontConfig.OversampleV = 3;
+        auto* font = io->Fonts->AddFontFromFileTTF("assets/fonts/Orbitron-Regular.ttf", fontSize, &fontConfig);
+        if (!font)
+        {
+            // Fallback to default if Orbitron not found
+            fontConfig.SizePixels = fontSize;
+            io->Fonts->AddFontDefault(&fontConfig);
+        }
+        io->FontGlobalScale = 1.0f; // already scaled via fontSize
 
         // Modern global style
         ImGui::StyleColorsDark();
