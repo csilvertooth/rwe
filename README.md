@@ -68,9 +68,22 @@ with Total Annihilation data files. This fork focuses on:
 | Extended FBI tags (30+ new tags) | Done |
 | MegaMap strategic overlay (scroll zoom) | Done |
 
-### Phase 4 -- Modernization
-SDL3 GPU API rendering, GameNetworkingSockets networking, NAT traversal,
-basic AI, pathfinding improvements, high-DPI support, expanded player slots.
+### Phase 4 -- Modernization [IN PROGRESS]
+| Feature | Status |
+|---------|--------|
+| Screen resolution + fullscreen (F11) | Done |
+| High-DPI / Retina support | Done |
+| Settings persistence (settings.cfg) | Done |
+| Options menu (Sound, Interface, Visuals) | Done |
+| TA panel scaling to resolution | Done |
+| RmlUi integration (foundation) | Done |
+| Multiplayer networking (Asio UDP) | Working (localhost) |
+| GameNetworkingSockets (Valve) | Built, integration pending |
+| NAT traversal | Pending (comes with GNS) |
+| Basic AI | Pending |
+| SDL3 GPU API rendering | Pending |
+| Pathfinding improvements | Pending |
+| Multiplayer desync fix | Pending |
 
 ## Acknowledgments
 
