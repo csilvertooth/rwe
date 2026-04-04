@@ -1546,6 +1546,19 @@ namespace rwe
         {
             healthBarsVisible = !healthBarsVisible;
         }
+        else if (keysym.key == SDLK_D && !isCtrlDown())
+        {
+            // D-Gun mode — toggle, then enter attack cursor to pick target
+            dgunMode = !dgunMode;
+            if (dgunMode)
+            {
+                cursorMode.next(AttackCursorMode());
+            }
+            else
+            {
+                cursorMode.next(NormalCursorMode());
+            }
+        }
         else if (keysym.key == SDLK_D && isCtrlDown())
         {
             // Self-destruct selected units (5 second countdown = 150 ticks)
@@ -1669,6 +1682,26 @@ namespace rwe
                 [&](const AttackCursorMode&) {
                     for (const auto& selectedUnit : selectedUnits)
                     {
+                        // D-Gun mode: directly set weapon3 target on the unit
+                        if (dgunMode)
+                        {
+                            auto unitOpt = simulation.tryGetUnitState(selectedUnit);
+                            if (unitOpt && unitOpt->get().weapons[2])
+                            {
+                                if (hoveredUnit)
+                                {
+                                    unitOpt->get().setWeaponTarget(2, *hoveredUnit);
+                                }
+                                else if (auto coord = getMouseTerrainCoordinate())
+                                {
+                                    unitOpt->get().setWeaponTarget(2, *coord);
+                                }
+                            }
+                            dgunMode = false;
+                            cursorMode.next(NormalCursorMode());
+                            continue;
+                        }
+
                         if (hoveredUnit)
                         {
                             if (isShiftDown())
@@ -2441,6 +2474,37 @@ namespace rwe
             for (const auto& selectedUnit : selectedUnits)
             {
                 simulation.killUnit(selectedUnit);
+            }
+            return;
+        }
+
+        if (arg == "ARMY")
+        {
+            // Spawn a variety of units around the cursor for testing
+            if (auto terrainPos = getMouseTerrainCoordinate())
+            {
+                auto& player = simulation.getPlayer(localPlayerId);
+                auto side = player.side;
+                std::transform(side.begin(), side.end(), side.begin(), ::toupper);
+
+                std::vector<std::string> armUnits = {"ARMCOM", "ARMPW", "ARMPW", "ARMPW", "ARMROCK", "ARMROCK", "ARMJETH", "ARMHAM", "ARMFLASH", "ARMSTUMP", "ARMBULL", "ARMFHAWK", "ARMBRAWL", "ARMLAB", "ARMSOLAR", "ARMMEX"};
+                std::vector<std::string> coreUnits = {"CORCOM", "CORAK", "CORAK", "CORAK", "CORROCK", "CORROCK", "CORTHUD", "CORLEVLR", "CORGATOR", "CORRAID", "CORSUMO", "CORVENG", "CORAPE", "CORLAB", "CORSOLAR", "CORMEX"};
+
+                auto& unitList = (side == "ARM") ? armUnits : coreUnits;
+                int i = 0;
+                for (const auto& unitType : unitList)
+                {
+                    if (!isValidUnitType(simulation, unitType))
+                    {
+                        continue;
+                    }
+                    auto offsetX = SimScalar((i % 4) * 60 - 90);
+                    auto offsetZ = SimScalar((i / 4) * 60 - 90);
+                    auto spawnPos = *terrainPos + SimVector(offsetX, 0_ss, offsetZ);
+                    spawnPos.y = simulation.terrain.getHeightAt(spawnPos.x, spawnPos.z);
+                    spawnCompletedUnit(unitType, localPlayerId, spawnPos);
+                    ++i;
+                }
             }
             return;
         }

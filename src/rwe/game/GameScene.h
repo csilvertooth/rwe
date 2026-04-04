@@ -262,6 +262,7 @@ namespace rwe
 
         bool healthBarsVisible{false};
         bool fogOfWarEnabled{true};
+        bool dgunMode{false};
 
         BehaviorSubject<CursorMode> cursorMode{NormalCursorMode()};
 
