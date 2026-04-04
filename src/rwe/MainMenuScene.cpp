@@ -14,8 +14,6 @@
 
 namespace rwe
 {
-    const Viewport MainMenuViewport(0, 0, 640, 480);
-
     MainMenuScene::MainMenuScene(
         const SceneContext& sceneContext,
         TdfBlock* audioLookup,
@@ -23,10 +21,10 @@ namespace rwe
         float height)
         : sceneContext(sceneContext),
           soundLookup(audioLookup),
-          scaledUiRenderService(sceneContext.graphics, sceneContext.shaders, &MainMenuViewport),
+          scaledUiRenderService(sceneContext.graphics, sceneContext.shaders, sceneContext.viewport),
           nativeUiRenderService(sceneContext.graphics, sceneContext.shaders, sceneContext.viewport),
           model(),
-          uiFactory(sceneContext.textureService, sceneContext.audioService, soundLookup, sceneContext.vfs, sceneContext.pathMapping, 640, 480),
+          uiFactory(sceneContext.textureService, sceneContext.audioService, soundLookup, sceneContext.vfs, sceneContext.pathMapping, sceneContext.viewport->width(), sceneContext.viewport->height()),
           panelStack(),
           dialogStack(),
           bgm()
@@ -901,8 +899,8 @@ namespace rwe
 
     Point MainMenuScene::toScaledCoordinates(int x, int y) const
     {
-        auto clip = screenToWorldRayUtil(scaledUiRenderService.getInverseViewProjectionMatrix(), sceneContext.viewport->toClipSpace(x, y));
-        return Point(static_cast<int>(clip.origin.x), static_cast<int>(clip.origin.y));
+        // Now using native viewport coordinates directly
+        return Point(x, y);
     }
 
     std::vector<std::string> MainMenuScene::getMapNames()
