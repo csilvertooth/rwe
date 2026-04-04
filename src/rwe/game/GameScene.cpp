@@ -3096,6 +3096,7 @@ namespace rwe
 
         processPlayerCommands(*playerCommands);
 
+        try {
         simulation.tick();
 
         auto gameHash = simulation.computeHash();
@@ -3105,6 +3106,10 @@ namespace rwe
         if (stateLogStream)
         {
             *stateLogStream << dumpJson(simulation) << std::endl;
+        }
+
+        } catch (const std::exception& ex) {
+            // Log but don't crash on simulation errors
         }
 
         processSimEvents();

@@ -2172,4 +2172,48 @@ namespace rwe
     {
         return featureDefinitions.get(featureDefinitionId);
     }
+
+    const UnitDefinition* GameSimulation::tryGetUnitDefinition(const std::string& unitType) const
+    {
+        auto it = unitDefinitions.find(unitType);
+        if (it == unitDefinitions.end())
+        {
+            LOG_ERROR << "Unit definition not found: " << unitType;
+            return nullptr;
+        }
+        return &it->second;
+    }
+
+    const UnitModelDefinition* GameSimulation::tryGetUnitModelDefinition(const std::string& objectName) const
+    {
+        auto it = unitModelDefinitions.find(objectName);
+        if (it == unitModelDefinitions.end())
+        {
+            LOG_ERROR << "Unit model definition not found: " << objectName;
+            return nullptr;
+        }
+        return &it->second;
+    }
+
+    const WeaponDefinition* GameSimulation::tryGetWeaponDefinition(const std::string& weaponType) const
+    {
+        auto it = weaponDefinitions.find(weaponType);
+        if (it == weaponDefinitions.end())
+        {
+            LOG_ERROR << "Weapon definition not found: " << weaponType;
+            return nullptr;
+        }
+        return &it->second;
+    }
+
+    const CobScript* GameSimulation::tryGetUnitScript(const std::string& unitType) const
+    {
+        auto it = unitScriptDefinitions.find(unitType);
+        if (it == unitScriptDefinitions.end())
+        {
+            LOG_ERROR << "Unit script not found: " << unitType;
+            return nullptr;
+        }
+        return &it->second;
+    }
 }

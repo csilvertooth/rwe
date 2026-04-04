@@ -501,5 +501,12 @@ namespace rwe
         std::optional<FeatureDefinitionId> tryGetFeatureDefinitionId(const std::string& featureName) const;
 
         const FeatureDefinition& getFeatureDefinition(FeatureDefinitionId featureDefinitionId) const;
+
+        // Safe accessors — return nullptr on miss instead of throwing.
+        // Use these in runtime/gameplay code instead of .at() to avoid crashes.
+        const UnitDefinition* tryGetUnitDefinition(const std::string& unitType) const;
+        const UnitModelDefinition* tryGetUnitModelDefinition(const std::string& objectName) const;
+        const WeaponDefinition* tryGetWeaponDefinition(const std::string& weaponType) const;
+        const CobScript* tryGetUnitScript(const std::string& unitType) const;
     };
 }
