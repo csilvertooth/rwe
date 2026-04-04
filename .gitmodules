@@ -25,3 +25,6 @@
 [submodule "libs/sdl3_mixer"]
 	path = libs/sdl3_mixer
 	url = https://github.com/libsdl-org/SDL_mixer.git
+[submodule "libs/rmlui"]
+	path = libs/rmlui
+	url = https://github.com/mikke89/RmlUi.git

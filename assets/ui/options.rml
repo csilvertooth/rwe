@@ -1,0 +1,64 @@
+<rml>
+<head>
+    <link type="text/rcss" href="theme.rcss"/>
+    <style>
+        body {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #000000a0;
+        }
+    </style>
+</head>
+<body>
+    <div class="panel center-panel">
+        <h1>OPTIONS</h1>
+        <div class="separator"/>
+
+        <div class="tab-bar">
+            <div class="tab active" id="tab-sound">Sound</div>
+            <div class="tab" id="tab-interface">Interface</div>
+            <div class="tab" id="tab-visuals">Visuals</div>
+        </div>
+
+        <div id="page-sound">
+            <h2>Sound</h2>
+            <div class="setting-row">
+                <span class="setting-label">Sound Volume</span>
+                <input type="range" min="0" max="100" value="100" id="sound-volume"/>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Music Volume</span>
+                <input type="range" min="0" max="100" value="50" id="music-volume"/>
+            </div>
+        </div>
+
+        <div id="page-interface" style="display: none;">
+            <h2>Interface</h2>
+            <div class="setting-row">
+                <span class="setting-label">Scroll Speed</span>
+                <input type="range" min="25" max="400" value="100" id="scroll-speed"/>
+            </div>
+        </div>
+
+        <div id="page-visuals" style="display: none;">
+            <h2>Display</h2>
+            <div class="setting-row">
+                <span class="setting-label">Resolution</span>
+                <select id="resolution">
+                    <option value="1280x960">1280 x 960</option>
+                    <option value="1920x1080" selected>1920 x 1080</option>
+                    <option value="2560x1440">2560 x 1440</option>
+                    <option value="3840x2160">3840 x 2160</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Fullscreen</span>
+                <input type="checkbox" id="fullscreen"/>
+            </div>
+        </div>
+
+        <div class="separator"/>
+        <div class="btn" id="btn-save">Save &amp; Close</div>
+    </div>
+</body>
+</rml>

@@ -1,0 +1,137 @@
+/* Annihilation Engine UI Theme */
+
+body {
+    font-family: Orbitron;
+    font-size: 16dp;
+    color: #e0e4f0;
+}
+
+h1 {
+    font-size: 28dp;
+    font-weight: bold;
+    color: #8cb4ff;
+    text-align: center;
+    margin-bottom: 16dp;
+}
+
+h2 {
+    font-size: 20dp;
+    font-weight: bold;
+    color: #8cb4ff;
+    margin-bottom: 8dp;
+    margin-top: 16dp;
+}
+
+.panel {
+    background-color: #14141cee;
+    border: 1dp solid #363850;
+    border-radius: 8dp;
+    padding: 24dp;
+    margin: auto;
+    width: 480dp;
+}
+
+.btn {
+    display: block;
+    width: 100%;
+    padding: 12dp 0;
+    margin: 6dp 0;
+    background-color: #2a3050;
+    border: 1dp solid #404870;
+    border-radius: 6dp;
+    color: #c8d0f0;
+    font-size: 16dp;
+    text-align: center;
+    cursor: pointer;
+}
+
+.btn:hover {
+    background-color: #3a4570;
+    border-color: #5068a0;
+    color: #ffffff;
+}
+
+.btn:active {
+    background-color: #1e2840;
+}
+
+.btn-danger {
+    background-color: #502020;
+    border-color: #804040;
+}
+
+.btn-danger:hover {
+    background-color: #703030;
+    border-color: #a05050;
+}
+
+.separator {
+    height: 1dp;
+    background-color: #363850;
+    margin: 12dp 0;
+}
+
+.setting-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin: 6dp 0;
+}
+
+.setting-label {
+    width: 180dp;
+    color: #8890b0;
+}
+
+select {
+    background-color: #1e2238;
+    border: 1dp solid #404870;
+    border-radius: 4dp;
+    padding: 6dp 8dp;
+    color: #c8d0f0;
+    font-size: 14dp;
+}
+
+input.range {
+    width: 200dp;
+}
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #00000088;
+}
+
+.center-panel {
+    margin: 10% auto;
+}
+
+.tab-bar {
+    display: flex;
+    flex-direction: row;
+    margin-bottom: 12dp;
+}
+
+.tab {
+    padding: 8dp 20dp;
+    background-color: #1e2238;
+    border: 1dp solid #363850;
+    border-radius: 4dp 4dp 0 0;
+    color: #8890b0;
+    cursor: pointer;
+    margin-right: 2dp;
+}
+
+.tab:hover {
+    background-color: #2a3050;
+    color: #c8d0f0;
+}
+
+.tab.active {
+    background-color: #2a3558;
+    border-bottom-color: #2a3558;
+    color: #8cb4ff;
+}

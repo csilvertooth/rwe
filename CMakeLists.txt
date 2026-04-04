@@ -73,6 +73,14 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 add_subdirectory("libs/sdl3_mixer")
 set(CMAKE_POSITION_INDEPENDENT_CODE OFF CACHE BOOL "" FORCE)
 
+# RmlUi — modern HTML/CSS UI framework
+set(RMLUI_BACKEND "SDL_GL3" CACHE STRING "" FORCE)
+set(RMLUI_SAMPLES OFF CACHE BOOL "" FORCE)
+set(RMLUI_TESTS OFF CACHE BOOL "" FORCE)
+set(RMLUI_THIRDPARTY_CONTAINERS OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+add_subdirectory("libs/rmlui")
+
 function(find_windows_dll var dll)
     if(WIN32)
         find_program(${var} ${dll})
@@ -671,6 +679,7 @@ endif()
 
 target_link_libraries(librwe SDL3::SDL3-static)
 target_link_libraries(librwe SDL3_mixer::SDL3_mixer)
+target_link_libraries(librwe rmlui)
 
 target_copy_file(librwe ${ZLIB_DLL})
 target_link_libraries(librwe ${ZLIB_LIBRARIES})
