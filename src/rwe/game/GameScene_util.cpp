@@ -591,6 +591,11 @@ namespace rwe
         auto position = lerp(simVectorToFloat(unit.previousPosition), simVectorToFloat(unit.position), frac);
         auto rotation = angleLerp(toRadians(unit.previousRotation).value, toRadians(unit.rotation).value, frac);
         auto transform = Matrix4f::translation(position) * Matrix4f::rotationY(rotation);
+        // Apply visual banking for air units
+        if (unit.bankAngle.value != 0.0f)
+        {
+            transform = transform * Matrix4f::rotationZ(std::sin(unit.bankAngle.value), std::cos(unit.bankAngle.value));
+        }
         if (unit.isBeingBuilt(unitDefinition))
         {
             drawBuildingUnitMesh(gameMediaDatabase, viewProjectionMatrix, unitDefinition.objectName, modelDefinition, unit.pieces, transform, unit.getPreciseCompletePercent(unitDefinition), position.y, playerColorIndex, frac, unitTextureAtlas, unitTeamTextureAtlases, batch);

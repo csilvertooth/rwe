@@ -315,7 +315,12 @@ namespace rwe
         u.canFly = fbi.canFly;
         u.hoverAttack = fbi.hoverAttack;
 
-        u.cruiseAltitude = SimScalar(fbi.cruiseAlt);
+        // CruiseAlt from FBI needs scaling to match original TA visual height
+        u.cruiseAltitude = SimScalar(fbi.cruiseAlt * 3);
+        if (fbi.canFly && u.cruiseAltitude <= 0_ss)
+        {
+            u.cruiseAltitude = 80_ss;
+        }
 
         u.weapon1 = fbi.weapon1;
         u.weapon2 = fbi.weapon2;

@@ -208,25 +208,29 @@ namespace rwe
 
     SimVector computeNewAirUnitVelocity(const UnitState& unit, const UnitDefinition& unitDefinition, const AirMovementStateFlying& physics)
     {
+        // Work in XZ plane only — altitude is handled independently in physics update
+        auto currentVelocityXZ = SimVector(physics.currentVelocity.x, 0_ss, physics.currentVelocity.z);
+
         if (!physics.targetPosition)
         {
-            return decelerate(physics.currentVelocity, unitDefinition.acceleration);
+            return decelerate(currentVelocityXZ, unitDefinition.acceleration);
         }
 
         auto rawDirection = *physics.targetPosition - unit.position;
+        rawDirection.y = 0_ss; // ignore Y difference
         auto distanceSquared = rawDirection.lengthSquared();
         auto direction = rawDirection.normalizedOr(SimVector(0_ss, 0_ss, 0_ss));
 
-        auto currentSpeedSquared = physics.currentVelocity.lengthSquared();
+        auto currentSpeedSquared = currentVelocityXZ.lengthSquared();
         auto decelerationDistance = currentSpeedSquared / (2_ss * unitDefinition.acceleration);
 
         if (distanceSquared > (decelerationDistance * decelerationDistance))
         {
             auto targetVelocity = direction * unitDefinition.maxVelocity;
-            auto velocityDelta = targetVelocity - physics.currentVelocity;
+            auto velocityDelta = targetVelocity - currentVelocityXZ;
             auto deltaDirection = velocityDelta.normalizedOr(SimVector(0_ss, 0_ss, 0_ss));
 
-            auto newVelocity = physics.currentVelocity + (deltaDirection * unitDefinition.acceleration);
+            auto newVelocity = currentVelocityXZ + (deltaDirection * unitDefinition.acceleration);
             if (newVelocity.lengthSquared() > (unitDefinition.maxVelocity * unitDefinition.maxVelocity))
             {
                 newVelocity = newVelocity.normalized() * unitDefinition.maxVelocity;
@@ -235,7 +239,7 @@ namespace rwe
         }
         else
         {
-            return decelerate(physics.currentVelocity, unitDefinition.acceleration);
+            return decelerate(currentVelocityXZ, unitDefinition.acceleration);
         }
     }
 

@@ -231,6 +231,9 @@ namespace rwe
         SimAngle rotation{0};
         SimAngle previousRotation{0};
 
+        /** Visual banking angle for air units (roll around forward axis). */
+        SimScalar bankAngle{0};
+
         UnitPhysicsInfo physics{UnitPhysicsInfoGround()};
 
         unsigned int hitPoints{0};

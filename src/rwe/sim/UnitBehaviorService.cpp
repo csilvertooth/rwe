@@ -10,9 +10,51 @@
 
 namespace rwe
 {
-    SimScalar getTargetAltitude(const MapTerrain& terrain, SimScalar x, SimScalar z, const UnitDefinition& unitDefinition)
+    SimScalar getTargetAltitude(const GameSimulation& sim, SimScalar x, SimScalar z, const UnitDefinition& unitDefinition)
     {
-        return rweMax(terrain.getHeightAt(x, z), terrain.getSeaLevel()) + unitDefinition.cruiseAltitude;
+        auto groundHeight = rweMax(sim.terrain.getHeightAt(x, z), sim.terrain.getSeaLevel());
+
+        // Check for features and buildings nearby that the aircraft must clear
+        // Use a 7x7 cell area (112x112 world units) to account for aircraft wingspan
+        auto heightmapPos = sim.terrain.worldToHeightmapCoordinate(SimVector(x, 0_ss, z));
+        auto gridW = static_cast<int>(sim.occupiedGrid.getWidth());
+        auto gridH = static_cast<int>(sim.occupiedGrid.getHeight());
+
+        SimScalar obstacleTop = groundHeight;
+        for (int dy = -3; dy <= 3; ++dy)
+        {
+            for (int dx = -3; dx <= 3; ++dx)
+            {
+                int cx = heightmapPos.x + dx;
+                int cy = heightmapPos.y + dy;
+                if (cx < 0 || cx >= gridW || cy < 0 || cy >= gridH)
+                {
+                    continue;
+                }
+                const auto& cell = sim.occupiedGrid.get(cx, cy);
+                if (cell.featureId)
+                {
+                    auto featureIt = sim.features.find(*cell.featureId);
+                    if (featureIt != sim.features.end())
+                    {
+                        const auto& featureDef = sim.getFeatureDefinition(featureIt->second.featureName);
+                        obstacleTop = rweMax(obstacleTop, featureIt->second.position.y + featureDef.height);
+                    }
+                }
+                if (cell.buildingInfo)
+                {
+                    auto unitOpt = sim.tryGetUnitState(cell.buildingInfo->unit);
+                    if (unitOpt)
+                    {
+                        const auto& bldgDef = sim.unitDefinitions.at(unitOpt->get().unitType);
+                        const auto& modelDef = sim.unitModelDefinitions.at(bldgDef.objectName);
+                        obstacleTop = rweMax(obstacleTop, unitOpt->get().position.y + modelDef.height);
+                    }
+                }
+            }
+        }
+
+        return obstacleTop + unitDefinition.cruiseAltitude;
     }
 
     UnitBehaviorService::UnitBehaviorService(GameSimulation* sim)
@@ -144,7 +186,18 @@ namespace rwe
                 match(
                     airPhysics->movementState,
                     [&](AirMovementStateFlying& m) {
-                        if (navigateTo(unitInfo, NavigationGoalLandingLocation()))
+                        auto terrainHeight = sim->terrain.getHeightAt(unitInfo.state->position.x, unitInfo.state->position.z);
+                        if (terrainHeight < sim->terrain.getSeaLevel())
+                        {
+                            // Over water — drift back and forth along facing direction
+                            auto driftDistance = 24_ss;
+                            auto driftPhase = sin(SimAngle(sim->gameTime.value * 40));
+                            auto driftX = unitInfo.state->position.x + driftDistance * driftPhase * sin(unitInfo.state->rotation);
+                            auto driftZ = unitInfo.state->position.z + driftDistance * driftPhase * cos(unitInfo.state->rotation);
+                            auto targetHeight = getTargetAltitude(*sim, driftX, driftZ, *unitInfo.definition);
+                            m.targetPosition = SimVector(driftX, targetHeight, driftZ);
+                        }
+                        else if (navigateTo(unitInfo, NavigationGoalLandingLocation()))
                         {
                             m.shouldLand = true;
                         }
@@ -201,7 +254,7 @@ namespace rwe
                     match(
                         p.movementState,
                         [&](const AirMovementStateTakingOff&) {
-                            auto targetHeight = getTargetAltitude(sim->terrain, unitInfo.state->position.x, unitInfo.state->position.z, *unitInfo.definition);
+                            auto targetHeight = getTargetAltitude(*sim, unitInfo.state->position.x, unitInfo.state->position.z, *unitInfo.definition);
                             if (unitInfo.state->position.y == targetHeight)
                             {
                                 p.movementState = AirMovementStateFlying();
@@ -215,8 +268,14 @@ namespace rwe
                             }
                             else
                             {
-                                auto targetHeight = sim->terrain.getHeightAt(unitInfo.state->position.x, unitInfo.state->position.z);
-                                if (unitInfo.state->position.y == targetHeight)
+                                auto terrainHeight = sim->terrain.getHeightAt(unitInfo.state->position.x, unitInfo.state->position.z);
+                                // Abort landing if trying to land underwater
+                                if (terrainHeight < sim->terrain.getSeaLevel())
+                                {
+                                    unitInfo.state->activate();
+                                    p.movementState = AirMovementStateFlying();
+                                }
+                                else if (unitInfo.state->position.y == terrainHeight)
                                 {
                                     if (!tryTransitionFromAirToGround(unitInfo))
                                     {
@@ -685,12 +744,26 @@ namespace rwe
                     [&](const AirMovementStateFlying& m) {
                         if (!m.targetPosition)
                         {
-                            // keep rotation as-is if not trying to go anywhere
+                            // Smoothly level out when not turning
+                            unitInfo.state->bankAngle = unitInfo.state->bankAngle * SimScalar(0.9f);
                             return;
                         }
                         auto direction = *m.targetPosition - unitInfo.state->position;
                         auto targetAngle = UnitState::toRotation(direction);
+                        auto prevRotation = unitInfo.state->rotation;
                         unitInfo.state->rotation = turnTowards(unitInfo.state->rotation, targetAngle, turnRateThisFrame);
+
+                        // Compute banking from heading difference to target
+                        auto [anticlockwise, headingDelta] = angleBetweenWithDirection(unitInfo.state->rotation, targetAngle);
+                        auto headingRad = static_cast<float>(headingDelta.value) / 65536.0f * 6.2832f;
+                        if (anticlockwise)
+                        {
+                            headingRad = -headingRad;
+                        }
+                        // Bank proportional to heading error, max ~45 degrees (0.78 rad)
+                        auto targetBank = SimScalar(std::clamp(headingRad * 3.0f, -0.78f, 0.78f));
+                        // Responsive smoothing
+                        unitInfo.state->bankAngle = unitInfo.state->bankAngle + (targetBank - unitInfo.state->bankAngle) * SimScalar(0.3f);
                     });
             });
     }
@@ -782,7 +855,43 @@ namespace rwe
                 match(
                     p.movementState,
                     [&](const AirMovementStateFlying& m) {
-                        auto newPosition = unitInfo.state->position + m.currentVelocity;
+                        // Apply only XZ velocity; altitude is computed independently
+                        auto velocity = m.currentVelocity;
+                        velocity.y = 0_ss;
+                        auto newPosition = unitInfo.state->position + velocity;
+
+                        // Lookahead altitude: sample ahead along movement direction
+                        // so the aircraft starts climbing/descending before reaching obstacles.
+                        // Also sample at current position for immediate terrain.
+                        auto altitudeHere = getTargetAltitude(*sim, newPosition.x, newPosition.z, *unitInfo.definition);
+                        auto targetAlt = altitudeHere;
+
+                        // Sample ahead using the unit's facing direction (more stable than velocity)
+                        auto facingDir = UnitState::toDirection(unitInfo.state->rotation);
+                        // Sample at 8 points ahead (48, 96, ..., 384 world units)
+                        for (int i = 1; i <= 8; ++i)
+                        {
+                            auto lookX = newPosition.x + facingDir.x * SimScalar(i * 48);
+                            auto lookZ = newPosition.z + facingDir.z * SimScalar(i * 48);
+                            targetAlt = rweMax(targetAlt, getTargetAltitude(*sim, lookX, lookZ, *unitInfo.definition));
+                        }
+
+                        // Smoothly approach the target altitude
+                        auto currentY = unitInfo.state->position.y;
+                        auto climbRate = 3_ss; // units per tick (90 units/second)
+                        if (currentY < targetAlt)
+                        {
+                            newPosition.y = rweMin(currentY + climbRate, targetAlt);
+                        }
+                        else if (currentY > targetAlt)
+                        {
+                            newPosition.y = rweMax(currentY - climbRate, targetAlt);
+                        }
+                        else
+                        {
+                            newPosition.y = targetAlt;
+                        }
+
                         tryApplyMovementToPosition(unitInfo, newPosition);
                     },
                     [&](const AirMovementStateTakingOff&) {
@@ -1566,7 +1675,7 @@ namespace rwe
 
     bool UnitBehaviorService::climbToCruiseAltitude(UnitInfo unitInfo)
     {
-        auto targetHeight = getTargetAltitude(sim->terrain, unitInfo.state->position.x, unitInfo.state->position.z, *unitInfo.definition);
+        auto targetHeight = getTargetAltitude(*sim, unitInfo.state->position.x, unitInfo.state->position.z, *unitInfo.definition);
 
         unitInfo.state->position.y = rweMin(unitInfo.state->position.y + 1_ss, targetHeight);
 
@@ -1576,6 +1685,13 @@ namespace rwe
     bool UnitBehaviorService::descendToGroundLevel(UnitInfo unitInfo)
     {
         auto terrainHeight = sim->terrain.getHeightAt(unitInfo.state->position.x, unitInfo.state->position.z);
+        auto seaLevel = sim->terrain.getSeaLevel();
+
+        // Don't land below sea level — abort landing if terrain is underwater
+        if (terrainHeight < seaLevel)
+        {
+            return false;
+        }
 
         unitInfo.state->position.y = rweMax(unitInfo.state->position.y - 1_ss, terrainHeight);
 
@@ -1650,7 +1766,7 @@ namespace rwe
         match(
             airPhysics->movementState,
             [&](AirMovementStateFlying& m) {
-                auto targetHeight = getTargetAltitude(sim->terrain, destination.x, destination.z, *unitInfo.definition);
+                auto targetHeight = getTargetAltitude(*sim, destination.x, destination.z, *unitInfo.definition);
                 SimVector destinationAtAltitude(destination.x, targetHeight, destination.z);
 
                 m.targetPosition = destinationAtAltitude;

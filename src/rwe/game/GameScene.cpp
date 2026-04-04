@@ -834,14 +834,6 @@ namespace rwe
         worldRenderService.drawBatch(terrainOverlayBatch, viewProjectionMatrix);
 
         auto interpolationFraction = static_cast<float>(millisecondsBuffer) / static_cast<float>(SimMillisecondsPerTick);
-        ColoredMeshesBatch selectionRectBatch;
-        for (const auto& selectedUnitId : selectedUnits)
-        {
-            const auto& unit = getUnit(selectedUnitId);
-            const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
-            drawSelectionRect(gameMediaDatabase, viewProjectionMatrix, unit, unitDefinition, interpolationFraction, selectionRectBatch);
-        }
-        worldRenderService.drawLineLoopsBatch(selectionRectBatch);
 
         auto seaLevel = simulation.terrain.getSeaLevel();
 
@@ -920,6 +912,17 @@ namespace rwe
         worldRenderService.drawSpriteBatch(featureBatch);
 
         sceneContext.graphics->disableDepthTest();
+
+        // Draw selection rects on top of all 3D objects
+        ColoredMeshesBatch selectionRectBatch;
+        for (const auto& selectedUnitId : selectedUnits)
+        {
+            const auto& unit = getUnit(selectedUnitId);
+            const auto& unitDefinition = simulation.unitDefinitions.at(unit.unitType);
+            drawSelectionRect(gameMediaDatabase, viewProjectionMatrix, unit, unitDefinition, interpolationFraction, selectionRectBatch);
+        }
+        worldRenderService.drawLineLoopsBatch(selectionRectBatch);
+
         ColoredMeshBatch nanoLinesBatch;
         for (const auto& [_, unit] : simulation.units)
         {
