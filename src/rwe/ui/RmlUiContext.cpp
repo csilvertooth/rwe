@@ -155,6 +155,8 @@ namespace rwe
     bool RmlUiContext::processEvent(SDL_Event& event)
     {
         if (!context) return false;
+        // Only consume events when documents are loaded and visible
+        if (context->GetNumDocuments() == 0) return false;
         return RmlSDL::InputEventHandler(context, window, event);
     }
 
