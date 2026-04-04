@@ -688,6 +688,7 @@ target_link_libraries(librwe SDL3_mixer::SDL3_mixer)
 target_link_libraries(librwe rmlui)
 target_include_directories(librwe PUBLIC "libs/rmlui/Backends")
 target_compile_definitions(librwe PUBLIC RMLUI_SDL_VERSION_MAJOR=3)
+target_compile_definitions(librwe PUBLIC RMLUI_GL3_CUSTOM_LOADER=<GL/glew.h>)
 
 target_copy_file(librwe ${ZLIB_DLL})
 target_link_libraries(librwe ${ZLIB_LIBRARIES})
