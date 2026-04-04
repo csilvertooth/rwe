@@ -597,6 +597,12 @@ set(GAME_FILES
     src/rwe/ui/UiListBox.h
     src/rwe/ui/UiPanel.cpp
     src/rwe/ui/UiPanel.h
+    src/rwe/ui/RmlUiContext.cpp
+    src/rwe/ui/RmlUiContext.h
+    libs/rmlui/Backends/RmlUi_Platform_SDL.cpp
+    libs/rmlui/Backends/RmlUi_Platform_SDL.h
+    libs/rmlui/Backends/RmlUi_Renderer_GL3.cpp
+    libs/rmlui/Backends/RmlUi_Renderer_GL3.h
     src/rwe/ui/UiScrollBar.cpp
     src/rwe/ui/UiScrollBar.h
     src/rwe/ui/UiStagedButton.cpp
@@ -680,6 +686,8 @@ endif()
 target_link_libraries(librwe SDL3::SDL3-static)
 target_link_libraries(librwe SDL3_mixer::SDL3_mixer)
 target_link_libraries(librwe rmlui)
+target_include_directories(librwe PUBLIC "libs/rmlui/Backends")
+target_compile_definitions(librwe PUBLIC RMLUI_SDL_VERSION_MAJOR=3)
 
 target_copy_file(librwe ${ZLIB_DLL})
 target_link_libraries(librwe ${ZLIB_LIBRARIES})

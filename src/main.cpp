@@ -23,6 +23,7 @@
 #include <rwe/render/OpenGlVersion.h>
 #include <rwe/rwe_time.h>
 #include <rwe/scene/SceneManager.h>
+#include <rwe/ui/RmlUiContext.h>
 #include <rwe/sdl/SdlContext.h>
 #include <rwe/sdl/SdlContextManager.h>
 #include <rwe/sim/Energy.h>
@@ -196,6 +197,11 @@ namespace rwe
 
         LOG_INFO << "Initializing Dear ImGui";
         ImGuiContext imGuiContext(imGuiIniPath, window.get(), glContext.get());
+
+        LOG_INFO << "Initializing RmlUi";
+        rwe::RmlUiContext rmlUiContext(window.get(), glContext.get());
+        rmlUiContext.loadFont("assets/fonts/Orbitron-Regular.ttf");
+        rmlUiContext.loadFont("assets/fonts/Orbitron-Bold.ttf");
 
         LOG_INFO << "Initializing virtual file system";
         CompositeVirtualFileSystem vfs;
