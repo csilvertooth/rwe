@@ -26,6 +26,7 @@ namespace rwe
         void updateViewport(int width, int height);
 
         Rml::Context* getContext() { return context; }
+        bool hasVisibleDocuments() const;
 
     private:
         SDL_Window* window;

@@ -127,14 +127,14 @@ namespace rwe
     void RmlUiContext::beginFrame()
     {
         if (!context) return;
-        if (context->GetNumDocuments() == 0) return;
+        if (!hasVisibleDocuments()) return;
         context->Update();
     }
 
     void RmlUiContext::render()
     {
         if (!context) return;
-        if (context->GetNumDocuments() == 0) return;
+        if (!hasVisibleDocuments()) return;
 
         // Save GL state that the game uses
         GLint prevFramebuffer;
@@ -164,7 +164,7 @@ namespace rwe
     bool RmlUiContext::processEvent(SDL_Event& event)
     {
         if (!context) return false;
-        if (context->GetNumDocuments() == 0) return false;
+        if (!hasVisibleDocuments()) return false;
 
         // Never consume Escape — let the scene handle it for closing menus
         if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
@@ -173,6 +173,20 @@ namespace rwe
         }
 
         return RmlSDL::InputEventHandler(context, window, event);
+    }
+
+    bool RmlUiContext::hasVisibleDocuments() const
+    {
+        if (!context) return false;
+        for (int i = 0; i < context->GetNumDocuments(); ++i)
+        {
+            auto* doc = context->GetDocument(i);
+            if (doc && doc->IsVisible())
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     void RmlUiContext::updateViewport(int width, int height)
