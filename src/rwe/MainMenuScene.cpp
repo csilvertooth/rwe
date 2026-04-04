@@ -227,25 +227,59 @@ namespace rwe
             {
                 ImGui::Text("DISPLAY");
                 ImGui::Spacing();
-                ImGui::Checkbox("Fullscreen", &cfg->fullscreen);
-                if (sceneContext.window)
+
+                // Resolution picker — system-supported resolutions
+                struct Resolution { int w; int h; const char* label; };
+                static const Resolution resolutions[] = {
+                    {1024, 768,  "1024 x 768"},
+                    {1280, 720,  "1280 x 720  (720p)"},
+                    {1280, 960,  "1280 x 960"},
+                    {1366, 768,  "1366 x 768"},
+                    {1440, 900,  "1440 x 900"},
+                    {1600, 900,  "1600 x 900"},
+                    {1680, 1050, "1680 x 1050"},
+                    {1920, 1080, "1920 x 1080 (1080p)"},
+                    {2560, 1440, "2560 x 1440 (1440p)"},
+                    {3440, 1440, "3440 x 1440 (Ultrawide)"},
+                    {3840, 2160, "3840 x 2160 (4K)"},
+                };
+                static const int numResolutions = sizeof(resolutions) / sizeof(resolutions[0]);
+
+                // Find current resolution index
+                int currentRes = -1;
+                for (int i = 0; i < numResolutions; ++i)
                 {
-                    if (ImGui::Button("Apply Fullscreen"))
+                    if (resolutions[i].w == static_cast<int>(cfg->windowWidth)
+                        && resolutions[i].h == static_cast<int>(cfg->windowHeight))
+                    {
+                        currentRes = i;
+                        break;
+                    }
+                }
+                if (currentRes < 0) currentRes = 2; // default to 1280x960
+
+                if (ImGui::Combo("Resolution", &currentRes, [](void* data, int idx) -> const char* {
+                    return static_cast<const Resolution*>(data)[idx].label;
+                }, (void*)resolutions, numResolutions))
+                {
+                    cfg->windowWidth = resolutions[currentRes].w;
+                    cfg->windowHeight = resolutions[currentRes].h;
+                    if (sceneContext.window)
+                    {
+                        sceneContext.sdl->setWindowSize(sceneContext.window, cfg->windowWidth, cfg->windowHeight);
+                    }
+                }
+
+                ImGui::Spacing();
+
+                bool isFullscreen = cfg->fullscreen;
+                if (ImGui::Checkbox("Fullscreen", &isFullscreen))
+                {
+                    cfg->fullscreen = isFullscreen;
+                    if (sceneContext.window)
                     {
                         sceneContext.sdl->setWindowFullscreen(sceneContext.window, cfg->fullscreen);
                     }
-                }
-                ImGui::Spacing();
-
-                int w = static_cast<int>(cfg->windowWidth);
-                int h = static_cast<int>(cfg->windowHeight);
-                ImGui::InputInt("Width", &w);
-                ImGui::InputInt("Height", &h);
-                cfg->windowWidth = static_cast<unsigned int>(std::max(640, w));
-                cfg->windowHeight = static_cast<unsigned int>(std::max(480, h));
-                if (sceneContext.window && ImGui::Button("Apply Resolution"))
-                {
-                    sceneContext.sdl->setWindowSize(sceneContext.window, cfg->windowWidth, cfg->windowHeight);
                 }
             }
 
