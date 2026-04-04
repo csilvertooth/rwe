@@ -52,24 +52,34 @@ namespace rwe
         io->IniFilename = this->iniPath.data();
         io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-        // Scale font based on window DPI/size for readability
-        int winW = 0, winH = 0;
-        SDL_GetWindowSize(window, &winW, &winH);
-        float dpiScale = std::max(1.0f, static_cast<float>(winH) / 768.0f);
-        float fontSize = 16.0f * dpiScale;
+        // Get PIXEL size for proper DPI scaling (Retina = 2x logical)
+        int pixW = 0, pixH = 0;
+        SDL_GetWindowSizeInPixels(window, &pixW, &pixH);
+        int logW = 0, logH = 0;
+        SDL_GetWindowSize(window, &logW, &logH);
+        float pixelRatio = (logW > 0) ? static_cast<float>(pixW) / static_cast<float>(logW) : 1.0f;
+        float dpiScale = std::max(1.0f, static_cast<float>(pixH) / 768.0f);
 
-        // Load Orbitron font for modern sci-fi look
+        // Load font at native pixel resolution for crisp rendering
+        float fontSize = 18.0f * dpiScale;
+
+        // Increase font atlas size for high-DPI
+        io->Fonts->Flags |= ImFontAtlasFlags_NoBakedLines;
+
         ImFontConfig fontConfig;
-        fontConfig.OversampleH = 3;
-        fontConfig.OversampleV = 3;
+        fontConfig.OversampleH = 2;
+        fontConfig.OversampleV = 2;
+        fontConfig.PixelSnapH = true;
         auto* font = io->Fonts->AddFontFromFileTTF("assets/fonts/Orbitron-Regular.ttf", fontSize, &fontConfig);
         if (!font)
         {
-            // Fallback to default if Orbitron not found
             fontConfig.SizePixels = fontSize;
             io->Fonts->AddFontDefault(&fontConfig);
         }
-        io->FontGlobalScale = 1.0f; // already scaled via fontSize
+
+        // Scale ImGui coordinates for Retina (ImGui works in logical coords)
+        io->FontGlobalScale = 1.0f / pixelRatio;
+        io->DisplayFramebufferScale = ImVec2(pixelRatio, pixelRatio);
 
         // Modern global style
         ImGui::StyleColorsDark();
